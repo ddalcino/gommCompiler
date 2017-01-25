@@ -1,7 +1,7 @@
 __author__ = 'dave'
 
 import os
-import Scanner
+import FileReader
 import SymbolTable
 
 test_file_dir = "/home/dave/PycharmProjects/Compiler/testCode/"
@@ -11,7 +11,7 @@ if __name__ == "__main__":
     for f in os.listdir(test_file_dir):
         filename = test_file_dir + f
         print("Test file is: " + filename)
-        with Scanner.FileReader(filename) as file_reader:   # open file safely
+        with FileReader.FileReader(filename) as file_reader:   # open file safely
             symbol_table = SymbolTable.SymbolTable()    # symbol table
             symbol_count = 0                    # number unique ids encountered
             token_buffer = ' ' * BUFFER_SIZE    # buffer to hold tokens

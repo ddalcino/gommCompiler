@@ -1,109 +1,223 @@
-__author__ = 'dave'
+# Filename: FileReader.py
+# David Dalcino
+# CS 6110
+# Prof. Reiter
+# Winter 2017
+# CSU East Bay
+#
+# Scanner Assignment
+# Due 1/27/17
+
+from FileReader import FileReader
+from Token import TokenType as tt, Token
 
 
-class FileReader:
-    """
-    This class is used to hide the implementation of file reading behind an
-    abstraction.
-    """
-    def __init__(self, filename):
-        # Open file for reading
-        self.file = open(filename, 'r')
-        # The current line being processed
-        self.current_line = self.file.readline()
-        # The last line that was processed
-        self.last_line = ""
-        # The index into self.current_line that points to the current
-        # character being processed
-        self.current_line_index = 0
+delta = {
+    # delta: a data structure that represents a delta function in a DFA. 
+    # The outer dictionary's keys are states of the DFA, while the dictionaries 
+    # that these keys refer to contain a list of characters to accept next, 
+    # and what state to move to upon reading that character. 
+    
+    # The expression 'delta[current_state][character_encountered]' would 
+    # resolve to the state the DFA should move into. 
+    
+    # Transitions to a sink state have been omitted, and may be inferred by 
+    # their absence if the previous state was not an accept state.
 
+    # Design: Some minimal amount of performance gains could be made by
+    # changing the datatype of the states to an enum or integral type,
+    # but I was unable to settle on a solution that I liked that was as
+    # readable as this.
 
+    "Start": {
+        "0": "Int_Zero_Accept",
 
-    def __enter__(self):
-        """
-        Allows 'with ... as ...' syntax, to ensure that files are closed
-        when they are no longer needed
-        """
-        return self
+        "1": "Integer_Accept",          "2": "Integer_Accept",
+        "3": "Integer_Accept",          "4": "Integer_Accept",
+        "5": "Integer_Accept",          "6": "Integer_Accept",
+        "7": "Integer_Accept",          "8": "Integer_Accept",
+        "9": "Integer_Accept",
 
+        "_": "ID",
+        "A": "ID",      "B": "ID",      "C": "ID",      "D": "ID",
+        "E": "ID",      "F": "ID",      "G": "ID",      "H": "ID",
+        "I": "ID",      "J": "ID",      "K": "ID",      "L": "ID",
+        "M": "ID",      "N": "ID",      "O": "ID",      "P": "ID",
+        "Q": "ID",      "R": "ID",      "S": "ID",      "T": "ID",
+        "U": "ID",      "V": "ID",      "W": "ID",      "X": "ID",
+        "Y": "ID",      "Z": "ID",
+        "a": "ID",      "b": "ID",      "c": "ID",      "d": "ID",
+        "e": "ID",      "f": "ID",      "g": "ID",      "h": "ID",
+        "i": "ID",      "j": "ID",      "k": "ID",      "l": "ID",
+        "m": "ID",      "n": "ID",      "o": "ID",      "p": "ID",
+        "q": "ID",      "r": "ID",      "s": "ID",      "t": "ID",
+        "u": "ID",      "v": "ID",      "w": "ID",      "x": "ID",
+        "y": "ID",      "z": "ID",
+        
+        "#": "Comment",
 
+        # Special characters that could be part of a multi-character token
+        "=": "Assignment_Accept",
+        "!": "Bang",
+        "<": "LessThan_Accept",
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Allows 'with ... as ...' syntax, to ensure that files are closed
-        when they are no longer needed
-        """
-        self.file.close()
+        # Special characters that can only be a single-character token
+        "+": "Add_Accept",              "-": "Subtract_Accept",
+        "*": "Multiply_Accept",         "/": "Divide_Accept",
+        "%": "Modulus_Accept",
+        "(": "OpenParen_Accept",        ")": "CloseParen_Accept",
+        "[": "OpenBracket_Accept",      "]": "CloseBracket_Accept",
+        "{": "OpenCurly_Accept",        "}": "CloseCurly_Accept",
+        ";": "Semicolon_Accept"
+    },
+    "Int_Zero_Accept": {
+        ".": "Float_Accept",
+    },
+    "Integer_Accept": {
+        "0": "Integer_Accept",          "1": "Integer_Accept",
+        "2": "Integer_Accept",          "3": "Integer_Accept",
+        "4": "Integer_Accept",          "5": "Integer_Accept",
+        "6": "Integer_Accept",          "7": "Integer_Accept",
+        "8": "Integer_Accept",          "9": "Integer_Accept",
+        ".": "Float_Accept"
+    },
+    "Float_Accept": {
+        "0": "Float_Accept",            "1": "Float_Accept",
+        "2": "Float_Accept",            "3": "Float_Accept",
+        "4": "Float_Accept",            "5": "Float_Accept",
+        "6": "Float_Accept",            "7": "Float_Accept",
+        "8": "Float_Accept",            "9": "Float_Accept",
+    },
+    "ID": {
+        "_": "ID",
+        "0": "ID",      "1": "ID",      "2": "ID",      "3": "ID",
+        "4": "ID",      "5": "ID",      "6": "ID",      "7": "ID",
+        "8": "ID",      "9": "ID",
+        "A": "ID",      "B": "ID",      "C": "ID",      "D": "ID",
+        "E": "ID",      "F": "ID",      "G": "ID",      "H": "ID",
+        "I": "ID",      "J": "ID",      "K": "ID",      "L": "ID",
+        "M": "ID",      "N": "ID",      "O": "ID",      "P": "ID",
+        "Q": "ID",      "R": "ID",      "S": "ID",      "T": "ID",
+        "U": "ID",      "V": "ID",      "W": "ID",      "X": "ID",
+        "Y": "ID",      "Z": "ID",
+        "a": "ID",      "b": "ID",      "c": "ID",      "d": "ID",
+        "e": "ID",      "f": "ID",      "g": "ID",      "h": "ID",
+        "i": "ID",      "j": "ID",      "k": "ID",      "l": "ID",
+        "m": "ID",      "n": "ID",      "o": "ID",      "p": "ID",
+        "q": "ID",      "r": "ID",      "s": "ID",      "t": "ID",
+        "u": "ID",      "v": "ID",      "w": "ID",      "x": "ID",
+        "y": "ID",      "z": "ID",
+    },
+    "Comment": {
+        # A special case: Any character except for \n goes back to the
+        # Comment state. Transitions are omitted for brevity.
+        "\n": "Start"
+    },
+    "Assignment_Accept": {
+        "=": "Equals_Accept"
+    },
+    "Bang": {
+        "=": "NotEquals_Accept"
+    },
+    "LessThan_Accept": {
+        "=": "LessThanEquals_Accept"
+    },
 
+    # Special characters that can only be a single-character token and have
+    # no valid transitions
+    "Add_Accept": {},              "Subtract_Accept": {},
+    "Multiply_Accept": {},         "Divide_Accept": {},
+    "Modulus_Accept": {},
+    "OpenParen_Accept": {},        "CloseParen_Accept": {},
+    "OpenBracket_Accept": {},      "CloseBracket_Accept": {},
+    "OpenCurly_Accept": {},        "CloseCurly_Accept": {},
+    "Semicolon_Accept": {},
+}
 
+# Defines which token type to create for each accept state
+token_for_accept_state = {
+    "Int_Zero_Accept":      tt.Integer,
+    "Integer_Accept":       tt.Integer,
+    "Float_Accept":         tt.Float,
+    "ID":                   tt.Identifier,
 
-    def get_char(self):
-        """
-        Gets the next character available, and ensures that the next
-        one will be available the next time it is called.
-        :return:    The next character available, or None if at end of file
-        """
+    "Assignment_Accept":    tt.AssignmentOperator,
+    "Equals_Accept":        tt.EqualityOperator,
+    "NotEquals_Accept":     tt.NotEqualOperator,
+    "LessThan_Accept":      tt.LessThanOperator,
+    "LessThanEquals_Accept": tt.LessThanOrEqualOperator,
 
-        # If the current_line_index is positive, it refers to the current line
-        if self.current_line_index >= 0:
-            # If the current line is an empty line, we are at the end of the
-            # file. Blank lines contain one character, '\n'
-            if len(self.current_line) == 0:
-                return None
-
-            # Obtain the current character
-            ch = self.current_line[self.current_line_index]
-        else:
-            # If the current_line_index is negative, it refers to the last line
-            index = len(self.last_line) + self.current_line_index
-            # Obtain the current character
-            ch = self.last_line[index]
-
-        # Increment the index, so the next time get_char is called, the next
-        # char will be available
-        self.current_line_index += 1
-
-        # If we've gone past the end of the line, advance to the next line
-        if self.current_line_index >= len(self.current_line):
-            self.last_line = self.current_line
-            self.current_line = self.file.readline()
-            self.current_line_index = 0
-
-        return ch
-
-
-
-    def EOF(self):
-        return self.current_line_index >= 0 and self.current_line == ""
-
-
-
-    def put_back(self):
-        """
-        Points current_line_index back to the last character read, so that it
-        may be read again.
-        Does not support putting back more characters than exist on a single
-        line, and will raise a FileReader.PutBackTooManyCharacters exception if
-        this occurs.
-        """
-        self.current_line_index -= 1
-
-        # Don't run off the end of self.last_line!
-        if len(self.last_line) <= -self.current_line_index:
-            raise FileReader.PutBackTooManyCharacters()
-
-
-
-    class PutBackTooManyCharacters(Exception):
-        """
-        An empty class used as an exception, raised when the user calls
-        put_back() more times than the FileReader can support
-        """
-        pass
-
+    # Special characters that can only be a single-character token
+    "Add_Accept":           tt.AddOperator,
+    "Subtract_Accept":      tt.SubtractOperator,
+    "Multiply_Accept":      tt.MultiplyOperator,
+    "Divide_Accept":        tt.DivideOperator,
+    "Modulus_Accept":       tt.ModulusOperator,
+    "OpenParen_Accept":     tt.OpenParen,
+    "CloseParen_Accept":    tt.CloseParen,
+    "OpenBracket_Accept":   tt.OpenBracket,
+    "CloseBracket_Accept":  tt.CloseBracket,
+    "OpenCurly_Accept":     tt.OpenCurly,
+    "CloseCurly_Accept":    tt.CloseCurly,
+    "Semicolon_Accept":     tt.Semicolon,
+}
 
 
 class Scanner:
 
-    def __init__(self):
-        pass
+    def __init__(self, input_filename):
+        self.filename = input_filename
+
+
+    def scan_file(self):
+        with FileReader(self.filename) as fr:
+            token = Scanner.get_token(fr)
+            print(token)
+
+    @staticmethod
+    def get_token(fr):
+        assert isinstance(fr, FileReader)
+
+        state = "Start"         # The state of the DFA
+        token_string = ""       # A string that will hold the contents of the
+                                # current token
+        # Get the next character
+        ch = fr.get_char()      # ch holds the next character
+
+        # Skip any whitespace
+        while ch.isspace():
+            ch = fr.get_char()
+
+        while True:
+            # Check for end of file
+            if fr.EOF():
+                return Token(tt.EndOfFile, "End Of File")
+
+            # If a transition is available,
+            if ch in delta[state].keys():
+                state = delta[state][ch]    # make the transition
+                token_string += ch          # save the character in the token
+            else:
+                # If no transition is available, put back the last character
+                fr.put_back()
+
+                # and make a token if we are in an accept state
+                if state in token_for_accept_state.keys():
+                    return Token(token_for_accept_state[state], token_string)
+
+                # otherwise reject the string, with an error message
+                else:
+                    raise Scanner.IllegalCharacterError(fr.get_line_data())
+            # Get the next character
+            ch = fr.get_char()
+
+
+
+    class IllegalCharacterError(Exception):
+        def __init__(self, line_data):
+            super('Illegal Character encountered in line %d at column %d:\n'
+                  % (line_data["Line_Num"], line_data["Column"]) +
+                  '%s\n' % line_data["Line"] +
+                  ' ' * line_data["Column"] + '^\n')
+
+
