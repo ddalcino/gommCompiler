@@ -1,13 +1,18 @@
-# Filename: FileReader.py
-# David Dalcino
-# CS 6110
-# Prof. Reiter
-# Winter 2017
-# CSU East Bay
-#
-# Scanner Assignment
-# Due 1/26/17
+"""
+Filename: FileReader.py
 
+David Dalcino
+CS 6110
+Prof. Reiter
+Winter 2017
+CSU East Bay
+
+Scanner Assignment
+Due 1/27/17
+
+This file implements a FileReader class, used to hide file reading behind an
+abstraction.
+"""
 
 class FileReader:
     """
@@ -30,9 +35,9 @@ class FileReader:
         # no longer needed
         self.file = None
         # The current line being processed
-        self.current_line = ""
+        self.current_line = " "
         # The last line that was processed
-        self.last_line = ""
+        self.last_line = " "
         # The index into self.current_line that points to the current
         # character being processed
         self.current_line_index = 0
@@ -136,7 +141,7 @@ class FileReader:
         self.current_line_index -= 1
 
         # Don't run off the end of self.last_line!
-        if len(self.last_line) <= -self.current_line_index:
+        if len(self.last_line) < -self.current_line_index:
             raise FileReader.PutBackTooManyCharacters()
 
 
