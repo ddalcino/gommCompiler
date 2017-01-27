@@ -1,0 +1,13 @@
+# file: testStrings.txt
+
+
+"This is a string"
+"This is a string with escape characters: \t\n\b"
+
+"Unclosed string
+# string not closed properly, expect error
+
+"Unclosed string with escape character \"
+# string not closed properly, expect error
+
+"Properly closed string"

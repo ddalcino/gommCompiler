@@ -1,0 +1,10 @@
+# file: testNumbers.txt
+
+0
+0.0
+0. 0 .5 3.14 2.714  # multiple illegal periods
+42
+5.4.    # illegal trailing period; expect error
+
+
+0007

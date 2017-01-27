@@ -1,0 +1,19 @@
+# file: testReservedWords.txt
+
+# List of keywords
+if
+else
+while
+func
+return
+int
+float
+char
+
+# List of built-in functions
+print
+prints
+read_int
+read_float
+read_char
+

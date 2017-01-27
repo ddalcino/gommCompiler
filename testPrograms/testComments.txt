@@ -1,0 +1,12 @@
+# file: testComments.txt
+# Multiline Comment
+#
+# The next few lines have no text or spaces, to test empty lines
+# The next line with text has no leading whitespace, to test push_back's
+# ability to back up when the previous line is empty
+
+
+
+c = a + b   # legal
+c = a & b   # illegal ampersand: expect an IllegalCharacter exception
+@^~`        # more illegal characters: expect IllegalCharacter exceptions

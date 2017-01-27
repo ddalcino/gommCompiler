@@ -1,0 +1,14 @@
+# file: testGcd.txt
+
+func gcd(a int, b int) k int {
+    var j int;      # a and b were passed by reference, so they should not be changed
+    j=a;k=b;        # tests the scanner's put_back function
+    while (j != k) {
+        if (k < j) {
+            j = j - k;
+        } else {
+            k = k - j;
+        }
+    }
+    return;
+}

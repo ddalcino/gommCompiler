@@ -64,13 +64,11 @@ delta = {
     # readable as this.
 
     "Start": {
-        "0": "Int_Zero_Accept",
-
-        "1": "Integer_Accept",          "2": "Integer_Accept",
-        "3": "Integer_Accept",          "4": "Integer_Accept",
-        "5": "Integer_Accept",          "6": "Integer_Accept",
-        "7": "Integer_Accept",          "8": "Integer_Accept",
-        "9": "Integer_Accept",
+        "0": "Integer_Accept",          "1": "Integer_Accept",
+        "2": "Integer_Accept",          "3": "Integer_Accept",
+        "4": "Integer_Accept",          "5": "Integer_Accept",
+        "6": "Integer_Accept",          "7": "Integer_Accept",
+        "8": "Integer_Accept",          "9": "Integer_Accept",
 
         "_": "ID",
         "A": "ID",      "B": "ID",      "C": "ID",      "D": "ID",
@@ -105,16 +103,20 @@ delta = {
         "{": "OpenCurly_Accept",        "}": "CloseCurly_Accept",
         ";": "Semicolon_Accept",        ",": "Comma_Accept",
     },
-    "Int_Zero_Accept": {
-        ".": "Float_Accept",
-    },
     "Integer_Accept": {
         "0": "Integer_Accept",          "1": "Integer_Accept",
         "2": "Integer_Accept",          "3": "Integer_Accept",
         "4": "Integer_Accept",          "5": "Integer_Accept",
         "6": "Integer_Accept",          "7": "Integer_Accept",
         "8": "Integer_Accept",          "9": "Integer_Accept",
-        ".": "Float_Accept"
+        ".": "Float_Unfinished"
+    },
+    "Float_Unfinished": {
+        "0": "Float_Accept",            "1": "Float_Accept",
+        "2": "Float_Accept",            "3": "Float_Accept",
+        "4": "Float_Accept",            "5": "Float_Accept",
+        "6": "Float_Accept",            "7": "Float_Accept",
+        "8": "Float_Accept",            "9": "Float_Accept",
     },
     "Float_Accept": {
         "0": "Float_Accept",            "1": "Float_Accept",
@@ -154,9 +156,11 @@ delta = {
     "String_Unfinished": {
         "\"": "String_Accept",
         "\\": "String_Escaped_Character",
+        "\n": "Sink_State",
         ANYTHING_ELSE: "String_Unfinished"
     },
     "String_Escaped_Character": {
+        "\n": "Sink_State",
         ANYTHING_ELSE: "String_Unfinished"
     },
     "String_Accept": {},
@@ -172,6 +176,8 @@ delta = {
         "=": "LessThanEquals_Accept"
     },
     "NotEquals_Accept": {},
+    "Equals_Accept": {},
+    "LessThanEquals_Accept": {},
 
     # Special characters that can only be a single-character token and have
     # no valid transitions
@@ -181,12 +187,14 @@ delta = {
     "OpenParen_Accept": {},         "CloseParen_Accept": {},
     "OpenBracket_Accept": {},       "CloseBracket_Accept": {},
     "OpenCurly_Accept": {},         "CloseCurly_Accept": {},
-    "Semicolon_Accept": {},         "Comma_Accept": {}
+    "Semicolon_Accept": {},         "Comma_Accept": {},
+
+    # No valid transitions out of the sink state
+    "Sink_State": {},
 }
 
 # Defines which token type to create for each accept state
 token_type_for_accept_state = {
-    "Int_Zero_Accept":      tt.Integer,
     "Integer_Accept":       tt.Integer,
     "Float_Accept":         tt.Float,
     "ID":                   tt.Identifier,
@@ -197,7 +205,7 @@ token_type_for_accept_state = {
     "Equals_Accept":        tt.EqualityOperator,
     "NotEquals_Accept":     tt.NotEqualOperator,
     "LessThan_Accept":      tt.LessThanOperator,
-    "LessThanEquals_Accept": tt.LessThanOrEqualOperator,
+    "LessThanEquals_Accept": tt.LessThanOrEqualOp,
 
     # Special characters that can only be a single-character token
     "Add_Accept":           tt.AddOperator,
@@ -253,6 +261,7 @@ class Scanner:
                 time_to_stop = False    # guard condition used to decide when
                                         # to stop reading a file
                 while not time_to_stop:
+                    token = None
                     try:
                         # get the next token
                         token = Scanner.get_token(fr)
@@ -262,10 +271,14 @@ class Scanner:
                         file_out.write("%r\n" % token)
                         # check guard condition
                         time_to_stop = token.t_type is tt.EndOfFile
-                    except Exception as e:
+                    except Scanner.IllegalCharacterError as e:
+                        # Print the exception and keep going
                         print(e)
                         file_out.write(str(e))
-                        time_to_stop = True
+
+                        # Throw away the illegal character
+                        fr.get_char()
+                        time_to_stop = token and token.t_type is tt.EndOfFile
 
 
 
@@ -288,12 +301,12 @@ class Scanner:
         ch = fr.get_char()      # ch holds the next character
 
         # Skip any whitespace
-        while ch.isspace():
+        while ch and ch.isspace():
             ch = fr.get_char()
 
         while True:
             # Check for end of file
-            if fr.EOF():
+            if state == "Start" and fr.EOF():
                 return Token(tt.EndOfFile, "End Of File")
 
             # If there are transitions on any character, and ch is not in the
@@ -321,7 +334,7 @@ class Scanner:
                         state = "Start"
                         token_string = ""
                         # Skip any whitespace
-                        if ch.isspace():
+                        if ch and ch.isspace():
                             while ch.isspace():
                                 ch = fr.get_char()
                             # Put back the non-space character
@@ -332,9 +345,9 @@ class Scanner:
 
                         # filter out reserved words from identifiers
                         if token_type == tt.Identifier:
-                            if token_type in keywords:
+                            if token_string in keywords:
                                 token_type = tt.Keyword
-                            elif token_type in built_in_functions:
+                            elif token_string in built_in_functions:
                                 token_type = tt.BuiltInFunction
 
                         # return the right token
@@ -367,5 +380,5 @@ class Scanner:
             super(Scanner.IllegalCharacterError, self).__init__(
                 "Illegal Character %r encountered in line %d at column %d:\n"
                 % (illegal_char, line_data["Line_Num"], line_data["Column"]) +
-                '%s' % line_data["Line"] +
-                ' ' * line_data["Column"] + '^\n')
+                "%s" % line_data["Line"] +
+                " " * line_data["Column"] + "^\n")

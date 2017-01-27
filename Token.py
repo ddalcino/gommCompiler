@@ -1,3 +1,19 @@
+"""
+Filename: Token.py
+
+David Dalcino
+CS 6110
+Prof. Reiter
+Winter 2017
+CSU East Bay
+
+Scanner Assignment
+Due 1/27/17
+
+
+This file defines tokens and token types.
+"""
+
 from enum import Enum
 
 
@@ -23,7 +39,7 @@ class TokenType(Enum):
     AssignmentOperator = 17
     EqualityOperator = 18
     NotEqualOperator = 19
-    LessThanOrEqualOperator = 20
+    LessThanOrEqualOp = 20
     LessThanOperator = 21
     Comma = 22
     String = 23
@@ -55,7 +71,7 @@ class Token:
         TokenType.AssignmentOperator: "=",
         TokenType.EqualityOperator: "==",
         TokenType.NotEqualOperator: "!=",
-        TokenType.LessThanOrEqualOperator: "<=",
+        TokenType.LessThanOrEqualOp: "<=",
         TokenType.LessThanOperator: "<"
     }
 

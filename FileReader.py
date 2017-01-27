@@ -125,6 +125,7 @@ class FileReader:
 
 
     def EOF(self):
+        """ Returns true if the end of the file has been encountered. """
         # if self.file.readline() returns "", we are at end of file
         return self.current_line_index >= 0 and self.current_line == ""
 

@@ -1,0 +1,102 @@
+func fibonacci(n int) result int {
+    if (n < 1) {
+        result = 0;
+        return;
+    }
+    result = 1;
+    var last int;
+    last = 0;
+    var temp;
+    var i int;
+    i = 1;
+    while (i < n) {
+        temp = last + result;
+        last = result;
+        result = temp;
+        i = i + 1;
+    }
+}
+func fibonacci_r(n int) result int {
+    if (n < 1) {
+        result = 0;
+        return;
+    }
+    if (n < 3) {
+        result = 1;
+        return;
+    }
+    result =  fibonacci_r(n - 1) + fibonacci_r(n - 2);
+    return;
+}
+func gcd(a int, b int) k int {
+    var j int;    # a and b were passed by reference, so they should not be changed
+    j = a;
+    k = b;
+    while (j != k) {
+        if (k < j) {
+            j = j - k;
+        } else {
+            k = k - j;
+        }
+    }
+    return;
+}
+func bubble_sort(array int[], size int) _ int {
+    var swapped int;
+    swapped = 1;
+    var j int;
+    var temp int;
+    while (0 < swapped) {                   # while swapped == true
+        swapped = 0;                        # false
+        j = 0;
+        while (j < size) {
+            if (array[j] < array[j-1]) {    # swap
+                temp = array[j-1];
+                array[j-1] = array[j];
+                array[j] = temp;
+                swapped = 1;                # true
+            }
+        }
+    }
+    return;
+}
+func sort20() _ int {
+    prints("Sort 20 values: Please input 20 integers.\n");
+    var array int[20];
+    var j int;
+    j = 0;
+    while (j < 20) {
+        array[j] = read_int();
+    }
+    bubble_sort(array, 20);
+    prints("Sorted list:\n");
+    j = 0;
+    while (j < 20) {
+        print(array[j]);
+        print("\n");
+    }
+    return;
+}
+func main() _ int {
+    prints("GCD of 2 values: Please input 2 integers.\n");
+    var a int;
+    var b int;
+    var d int;
+    a = read_int();
+    b = read_int();
+    d = gcd(a, b);
+    prints("GCD of "); print(a); prints(" and "); print(b); prints(" is: ");
+    print(d); prints(".\n\n");
+
+    sort20();
+
+    prints("Fibonacci sequence: Please input an integer.\n");
+    var a int;
+    var fib int;
+    a = read_int();
+    fib = fibonacci(a);
+
+    prints("Fibonacci Number "); print(a); prints(" is: "); print(fib);
+    prints(".\n\n");
+    return;
+}

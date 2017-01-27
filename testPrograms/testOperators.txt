@@ -1,0 +1,34 @@
+# file: testOperators.txt
+
+# Valid operators:
+
++
+-
+*
+/
+%
+(
+)
+{
+}
+[
+]
+;
+=
+<
+,
+==
+!=
+<=
+
++-*/%(){}[];=<, == != <=
+
+# Invalid/undefined operators: Expect errors
+>
+>=
+:=
+&
+&&
+|
+||
+^

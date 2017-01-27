@@ -27,4 +27,3 @@ if __name__ == "__main__":
         output_filename = output_dir + f + ".tokens"
         print("Test file is: " + input_filename)
         Scanner.scan_file(input_filename, output_filename)
-
