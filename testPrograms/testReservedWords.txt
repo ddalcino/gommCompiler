@@ -10,6 +10,15 @@ int
 float
 char
 
+# List of identifiers that look like keywords
+IF
+iff
+ElSe
+cHAR
+character
+function
+mint
+
 # List of built-in functions
 print
 prints

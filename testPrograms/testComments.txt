@@ -7,6 +7,9 @@
 
 
 
-c = a + b   # legal
-c = a & b   # illegal ampersand: expect an IllegalCharacter exception
+c=a+b   # legal
+c=a&b   # illegal ampersand: expect an IllegalCharacter exception
 @^~`        # more illegal characters: expect IllegalCharacter exceptions
+
+
+# comment at end of file

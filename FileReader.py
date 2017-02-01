@@ -70,6 +70,17 @@ class FileReader:
 
 
 
+    def get_char_skip_whitespace(self):
+        """
+        :return:    The next non-whitespace character available, or None if at
+                    end of file
+        """
+        ch = self.get_char()
+        while ch is not None and ch.isspace():
+            ch = self.get_char()
+        return ch
+
+
     def get_char(self):
         """
         Gets the next character available, and ensures that the next

@@ -55,7 +55,7 @@ class Token:
     """
 
     # Static database of string representations:
-    str_repr = {
+    lexemes = {
         TokenType.AddOperator: "+",
         TokenType.SubtractOperator: "-",
         TokenType.MultiplyOperator: "*",
@@ -77,11 +77,11 @@ class Token:
 
 
 
-    def __init__(self, token_type, string_repr):
+    def __init__(self, token_type, lexeme):
         """
         Initializes a Token
         :param token_type:  a TokenType object
-        :param string_repr: a string representation of the token
+        :param lexeme:      a string; the token as a lexeme
         :return:            None
         """
 
@@ -91,22 +91,22 @@ class Token:
         # The type of token, a TokenType enum
         self.t_type = token_type
 
-        # self.string_repr = The string representation of the token
+        # self.lexeme = The string representation of the token
         # If the string representation is in the static database str_repr,
         # we can point to that location instead of using excess memory
-        if token_type in Token.str_repr.keys():
-            self.string_repr = Token.str_repr[token_type]
+        if token_type in Token.lexemes.keys():
+            self.lexeme = Token.lexemes[token_type]
         else:
-            self.string_repr = string_repr
+            self.lexeme = lexeme
 
 
 
     def __str__(self):
         """ returns a string representation of the token """
-        return self.string_repr
+        return self.lexeme
 
 
 
     def __repr__(self):
         """ returns a string representation of the token """
-        return "%-30s|  %s" %(str(self.t_type), self.string_repr)
+        return "%-30s|  %s" %(str(self.t_type), self.lexeme)

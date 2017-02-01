@@ -52,8 +52,8 @@ delta = {
     # that these keys refer to contain a list of characters to accept next, 
     # and what state to move to upon reading that character. 
     
-    # The expression 'delta[current_state][character_encountered]' would 
-    # resolve to the state that the DFA should move into.
+    # The expression 'delta[current_state][character_encountered]' is the
+    # state that the DFA should move into.
     
     # Transitions to a sink state have been omitted, and may be inferred by 
     # their absence if the previous state was not an accept state.
@@ -87,7 +87,7 @@ delta = {
         "y": "ID",      "z": "ID",
         
         "#": "Comment",
-        "\"": "String_Unfinished",
+        "\"": "String_Begun",
 
         # Special characters that could be part of a multi-character token
         "=": "Assignment_Accept",
@@ -95,6 +95,7 @@ delta = {
         "<": "LessThan_Accept",
 
         # Special characters that can only be a single-character token
+        # TODO: decide whether or not to put +- in same state, also */%
         "+": "Add_Accept",              "-": "Subtract_Accept",
         "*": "Multiply_Accept",         "/": "Divide_Accept",
         "%": "Modulus_Accept",
@@ -153,15 +154,15 @@ delta = {
         ANYTHING_ELSE: "Comment"
     },
 
-    "String_Unfinished": {
+    "String_Begun": {
         "\"": "String_Accept",
         "\\": "String_Escaped_Character",
         "\n": "Sink_State",
-        ANYTHING_ELSE: "String_Unfinished"
+        ANYTHING_ELSE: "String_Begun"
     },
     "String_Escaped_Character": {
         "\n": "Sink_State",
-        ANYTHING_ELSE: "String_Unfinished"
+        ANYTHING_ELSE: "String_Begun"
     },
     "String_Accept": {},
     "Comment_Accept": {},
@@ -285,24 +286,19 @@ class Scanner:
     @staticmethod
     def get_token(fr):
         """
-        Retrieves the next token in a file opened by a FileReader. May return a
-        Comment token, which should be ignored.
+        Retrieves the next token in a file opened by a FileReader. Filters out
+        Comment tokens, which should be ignored.
         :param fr:  a FileReader object
         :return:    a Token object corresponding to the next token the
                     scanner should encounter.
-                    Warning: May be a Comment token that should be ignored
         """
         assert isinstance(fr, FileReader)
 
         state = "Start"         # The state of the DFA
         token_string = ""       # A string that will hold the contents of the
                                 # current token
-        # Get the next character
-        ch = fr.get_char()      # ch holds the next character
-
-        # Skip any whitespace
-        while ch and ch.isspace():
-            ch = fr.get_char()
+        # ch holds the next non-whitespace character
+        ch = fr.get_char_skip_whitespace()
 
         while True:
             # Check for end of file
@@ -311,7 +307,8 @@ class Scanner:
 
             # If there are transitions on any character, and ch is not in the
             # list of defined transitions,
-            if ANYTHING_ELSE in delta[state] and ch not in delta[state].keys():
+            if ANYTHING_ELSE in delta[state] and ch and ch not in delta[\
+                    state].keys():
                 # make the transition
                 state = delta[state][ANYTHING_ELSE]
                 # save the character in the token
@@ -329,7 +326,7 @@ class Scanner:
 
                 # and make a token if we are in an accept state
                 if state in token_type_for_accept_state.keys():
-                    # filter out comments
+                    # filter out comments. TODO: move this to another function
                     if token_type_for_accept_state[state] in ignored_token_t:
                         state = "Start"
                         token_string = ""
