@@ -232,10 +232,8 @@ ignored_token_t = (tt.Comment, )
 # Reserved words:
 
 # List of keywords
-keywords = ("if", "else", "while", "func", "return", "int", "float", "char")
-
-# List of built-in functions
-built_in_functions = ("print", "prints", "read_int", "read_float", "read_char")
+keywords = ("if", "else", "while", "func", "return", "int", "float", "char",
+            "var")
 
 
 
@@ -326,7 +324,7 @@ class Scanner:
 
                 # and make a token if we are in an accept state
                 if state in token_type_for_accept_state.keys():
-                    # filter out comments. TODO: move this to another function
+                    # filter out comments.
                     if token_type_for_accept_state[state] in ignored_token_t:
                         state = "Start"
                         token_string = ""
@@ -344,8 +342,6 @@ class Scanner:
                         if token_type == tt.Identifier:
                             if token_string in keywords:
                                 token_type = tt.Keyword
-                            elif token_string in built_in_functions:
-                                token_type = tt.BuiltInFunction
 
                         # return the right token
                         return Token(token_type, token_string)

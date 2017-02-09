@@ -12,6 +12,9 @@ Due 1/27/17
 
 
 This file defines tokens and token types.
+
+Changed slightly for the Parser assignment, due 2/9/17, and included in that
+assignment to make the Parser more readable.
 """
 
 from enum import Enum
@@ -44,7 +47,6 @@ class TokenType(Enum):
     Comma = 22
     String = 23
     Keyword = 24
-    BuiltInFunction = 25
 
 
 
@@ -110,3 +112,46 @@ class Token:
     def __repr__(self):
         """ returns a string representation of the token """
         return "%-30s|  %s" %(str(self.t_type), self.lexeme)
+
+
+
+    def assignTo(self, other_token):
+        """
+        Copies the data in other_token into this token
+        :param other_token:     The other token, from which to copy data
+        :return:                None
+        """
+        assert isinstance(other_token, Token)
+
+        self.t_type = other_token.t_type
+        self.lexeme = other_token.lexeme
+
+
+
+    def equals(self, other_token):
+        """
+        Determines equivalence of two Tokens
+        :param other_token:     The token to compare to self
+        :return:                True if the tokens are equal, otherwise False
+        """
+        return isinstance(other_token, Token) and\
+            self.t_type == other_token.t_type and \
+            self.lexeme == other_token.lexeme
+
+
+
+class Keyword:
+    """ Holds a list of keyword tokens; meant to be constant. """
+
+    IF = Token(TokenType.Keyword, "if")
+    ELSE = Token(TokenType.Keyword, "else")
+    WHILE = Token(TokenType.Keyword, "while")
+    FUNC = Token(TokenType.Keyword, "func")
+    RETURN = Token(TokenType.Keyword, "return")
+    INT = Token(TokenType.Keyword, "int")
+    FLOAT = Token(TokenType.Keyword, "float")
+    CHAR = Token(TokenType.Keyword, "char")
+    VAR = Token(TokenType.Keyword, "var")
+
+
+
