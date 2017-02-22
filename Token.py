@@ -111,7 +111,7 @@ class Token:
 
     def __repr__(self):
         """ returns a string representation of the token """
-        return "%-30s|  %s" %(str(self.t_type), self.lexeme)
+        return "<%s, lex=%s>" %(str(self.t_type), self.lexeme)
 
 
 

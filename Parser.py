@@ -38,7 +38,9 @@ grammar = {
     # structure is a dictionary; its keys represent non-terminal symbols,
     # and the values associated with those keys are a list of productions.
 
-    # Each production is a list, in the form (non-terminal|terminal)+
+    # Each production is a list, in the form (number)(non-terminal|terminal)+
+    # The number at the start of the list is an identifier, used to identify
+    # particular productions; it is not part of any production.
     # A production could also be a None object instead of a list; this
     # designates an epsilon.
 
@@ -49,18 +51,18 @@ grammar = {
     # conceivably, I could change every instance of a keyword into the
     # TokenType for a keyword, but I think that makes the grammar a lot less
     # useful and harder to read. Alternately, I could change each keyword
-    # into its own TokenType
+    # into its own TokenType.
 
     # A program is a list of function declarations
     "program": (
-        ("function_decl", "program",),
-        None,
+        (1, "function_decl", "program",),
+        (2, None,),
     ),
 
     # A function declaration looks like:
     # func <id> (<param_list>) <ret_identifier> <ret_datatype> {<code_block>}
     "function_decl": (
-        (Keyword.FUNC, tt.Identifier, tt.OpenParen, "param_list",
+        (3, Keyword.FUNC, tt.Identifier, tt.OpenParen, "param_list",
          tt.CloseParen, "return_identifier", "return_datatype", tt.OpenCurly,
          "statement_list", tt.CloseCurly,),
     ),
@@ -68,125 +70,127 @@ grammar = {
     # A parameter list is a list of basic declaration statements, of the form
     #  <identifier> <datatype>
     "param_list": (
-        (tt.Identifier, "datatype", "remaining_param_list",),
-        None,
+        (4, tt.Identifier, "datatype", "remaining_param_list",),
+        (5, None,),
     ),
 
     "remaining_param_list": (
-        (tt.Comma, tt.Identifier, "datatype", "remaining_param_list",),
-        None,        # an epsilon
+        (6, tt.Comma, tt.Identifier, "datatype", "remaining_param_list",),
+        (7, None,),        # an epsilon
     ),
 
     "datatype": (
-        (Keyword.INT,),
-        (Keyword.FLOAT,),
-        (Keyword.CHAR,),
-        (tt.OpenBracket, tt.Integer, tt.CloseBracket, "array_of_datatype",),
+        (8, Keyword.INT,),
+        (9, Keyword.FLOAT,),
+        (10, Keyword.CHAR,),
+        (11, tt.OpenBracket, tt.Integer, tt.CloseBracket, "array_of_datatype",),
     ),
 
     "array_of_datatype": (
-        (Keyword.INT,),
-        (Keyword.FLOAT,),
-        (Keyword.CHAR,),
+        (12, Keyword.INT,),
+        (13, Keyword.FLOAT,),
+        (14, Keyword.CHAR,),
     ),
 
     "return_identifier": (
-        (tt.Identifier,),
+        (15, tt.Identifier,),
     ),
 
     "return_datatype": (
-        ("datatype",),
+        (16, "datatype",),
     ),
 
     # A statement list is a list of statements
     "statement_list": (
-        ("basic_statement", "statement_list"),
-        None,
+        (17, "basic_statement", "statement_list"),
+        (18, None,),
     ),
 
     # A basic statement is in the form:
     # <statement> ::= <return_statement> | <if_statement> | <loop_statement> |
     # <declaration_statement> | <assignment_statement> |
     "basic_statement": (
-        (Keyword.RETURN, tt.Semicolon),                 # return statement
-        (Keyword.IF, "remaining_if_statement"),         # if statement
-        (Keyword.WHILE, "remaining_while_statement"),   # loop statement
+        (19, Keyword.RETURN, tt.Semicolon),                 # return statement
+        (20, Keyword.IF, "remaining_if_statement"),         # if statement
+        (21, Keyword.WHILE, "remaining_while_statement"),   # loop statement
         # variable declaration statement
-        (Keyword.VAR, tt.Identifier, "datatype", tt.Semicolon),
+        (22, Keyword.VAR, tt.Identifier, "datatype", tt.Semicolon),
         # assignment or function call
-        (tt.Identifier, "assignment_or_function_call", tt.Semicolon),
+        (23, tt.Identifier, "assignment_or_function_call", tt.Semicolon),
     ),
 
     "assignment_or_function_call": (
-        (tt.AssignmentOperator, "expression"),          # assignment statement
-        (tt.OpenBracket, "expression", tt.CloseBracket,     # array indexing
+        (24, tt.AssignmentOperator, "expression"),        # assignment statement
+        (25, tt.OpenBracket, "expression", tt.CloseBracket,  # array indexing
          tt.AssignmentOperator, "expression"),          # assignment statement
-        (tt.OpenParen, "expression_list", tt.CloseParen),   # function call
+        (26, tt.OpenParen, "expression_list", tt.CloseParen),   # function call
     ),
 
     "expression_list": (
-        ("expression", "remaining_expression_list"),
-        None,
+        (27, "expression", "remaining_expression_list"),
+        (28, None,),
     ),
     "remaining_expression_list": (
-        (tt.Comma, "expression", "remaining_expression_list",),
-        None,
+        (29, tt.Comma, "expression", "remaining_expression_list",),
+        (30, None,),
     ),
 
     "remaining_if_statement": (
-        (tt.OpenParen, "boolean_expression", tt.CloseParen,
+        (31, tt.OpenParen, "boolean_expression", tt.CloseParen,
          tt.OpenCurly, "statement_list", tt.CloseCurly, "else_clause"),
     ),
     "else_clause": (
-        (Keyword.ELSE, tt.OpenCurly, "statement_list", tt.CloseCurly,),
-        None,
+        (32, Keyword.ELSE, tt.OpenCurly, "statement_list", tt.CloseCurly,),
+        (33, None,),
     ),
 
     "remaining_while_statement": (
-        (tt.OpenParen, "boolean_expression", tt.CloseParen,
+        (34, tt.OpenParen, "boolean_expression", tt.CloseParen,
          tt.OpenCurly, "statement_list", tt.CloseCurly,),
     ),
 
     "expression": (
-        ("term", "expr_prime"),
+        (35, "term", "expr_prime"),
     ),
     "expr_prime": (
-        (tt.AddOperator, "term", "expr_prime",),
-        (tt.SubtractOperator, "term", "expr_prime",),
-        None
+        (36, tt.AddOperator, "term", "expr_prime",),
+        (37, tt.SubtractOperator, "term", "expr_prime",),
+        (38, None,),
     ),
     "term": (
-        ("factor", "term_prime"),
+        (39, "factor", "term_prime"),
     ),
     "term_prime": (
-        (tt.MultiplyOperator, "factor", "term_prime"),
-        (tt.DivideOperator, "factor", "term_prime"),
-        (tt.ModulusOperator, "factor", "term_prime"),
-        None
+        (40, tt.MultiplyOperator, "factor", "term_prime"),
+        (41, tt.DivideOperator, "factor", "term_prime"),
+        (42, tt.ModulusOperator, "factor", "term_prime"),
+        (43, None,),
     ),
     "factor": (
-        (tt.OpenParen, "expression", tt.CloseParen),
-        (tt.Identifier, "variable_or_function_call"),
-        (tt.Float,),
-        (tt.Integer,),
-        (tt.String,),
+        (44, tt.OpenParen, "expression", tt.CloseParen),
+        (45, tt.Identifier, "variable_or_function_call"),
+        (46, tt.Float,),
+        (47, tt.Integer,),
+        (48, tt.String,),
     ),
     "variable_or_function_call": (
-        (tt.OpenBracket, "expression", tt.CloseBracket),    # array indexing
-        (tt.OpenParen, "expression_list", tt.CloseParen),   # function call
-        None                            # epsilon, for variable
+        (49, tt.OpenBracket, "expression", tt.CloseBracket),    # array indexing
+        (50, tt.OpenParen, "expression_list", tt.CloseParen),   # function call
+        (51, None,),                            # epsilon, for variable
     ),
 
     "boolean_expression": (
-        ("expression", "boolean_comparator", "expression",),
+        (52, "expression", "boolean_comparator", "expression",),
     ),
     "boolean_comparator": (
-        (tt.EqualityOperator,),
-        (tt.NotEqualOperator,),
-        (tt.LessThanOperator,),
-        (tt.LessThanOrEqualOp,),
+        (53, tt.EqualityOperator,),
+        (54, tt.NotEqualOperator,),
+        (55, tt.LessThanOperator,),
+        (56, tt.LessThanOrEqualOp,),
     ),
 }
+
+add_newline_before = (3, 17)
 
 
 class Parser:
@@ -210,7 +214,7 @@ class Parser:
             non_terminal = "program"
             Parser.rd_parse(non_terminal, current_token, fr)
             Parser.match(current_token, tt.EndOfFile, fr)
-            print("Success!!!")
+            print("\nSuccess!!!")
 
 
 
@@ -231,31 +235,37 @@ class Parser:
         assert(isinstance(current_token, Token))
 
         # First, choose a production, based on what's in grammar[non_terminal]
-        if None in grammar[non_terminal]:
+
+        # If the rule-set contains an epsilon,
+        if None in [x[1] for x in grammar[non_terminal]]:
             # there's an epsilon move available, so we should check if
             # current_token exists in the set of first terminals for
             # non_terminal; if not, we should take the epsilon move
             if not Parser.is_in_first_terminals(current_token, non_terminal):
                 # take the epsilon move
                 # report which production we are using ...
-                print("%s %d" %
-                      (non_terminal, grammar[non_terminal].index(None)))
+                _id = [x[0] for x in grammar[non_terminal] if x[1] is None][0]
+                if _id in add_newline_before:
+                    print("")
+                print(_id, end=" ")
                 return
 
         # If we didn't take the epsilon move, then check current_token
         # against the first terminal in each production
-        for i in range(len(grammar[non_terminal])):
-            production = grammar[non_terminal][i]
-            if production is not None:              # not an epsilon move
+        for production in grammar[non_terminal]:
+            _id = production[0]                      # identifier for production
+            if production[1] is not None:           # not an epsilon move
                 # get the first symbol in the production
-                first = production[0]
+                first = production[1]
 
                 # if current_token fits into first, then choose is production:
                 if Parser.fits(current_token, first):
+                    if _id in add_newline_before:
+                        print("")
                     # report which production we are using ...
-                    print("%s %d" % (non_terminal, i))
+                    print(_id, end=" ")
                     # ... and use that production
-                    for symbol in production:
+                    for symbol in production[1:]:
                         # if it's a non-terminal symbol,
                         if isinstance(symbol, str):
                             Parser.rd_parse(symbol, current_token, file_reader)
@@ -332,14 +342,14 @@ class Parser:
         """
         first = []
         for production in grammar[non_terminal]:
-            if production is not None:
+            if production[1] is not None:
                 # if the first symbol in the production is a non-terminal,
-                if isinstance(production[0], str):
+                if isinstance(production[1], str):
                     # add all non-terminals for the production to first
-                    first.extend(Parser.first_terminals(production[0]))
+                    first.extend(Parser.first_terminals(production[1]))
                 else:
                     # otherwise, add a terminal symbol
-                    first.append(production[0])
+                    first.append(production[1])
             elif not skip_epsilon:
                 # The list of productions includes an epsilon, so add a None
                 # to the list

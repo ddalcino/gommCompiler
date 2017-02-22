@@ -1,5 +1,5 @@
 __author__ = 'dave'
-
+from enum import Enum
 
 class Scope:
     """
@@ -43,6 +43,23 @@ class Scope:
 
 
 
+class IdType(Enum):
+    """ An enumeration for types of identifiers """
+    Integer = 1
+    Float = 2
+    Char = 3
+    String = 4
+    Function = 5
+    ArrayInteger = 6
+    ArrayFloat = 7
+    ArrayChar = 8
+
+
+
+# Builtin functions; should be visible everywhere
+builtin_functions = ("print", "prints", "read_int", "read_float", "read_char")
+
+
 
 class SymbolTable:
     """
@@ -63,6 +80,10 @@ class SymbolTable:
         # Get the symbol table ready to accept new values: open a new scope.
         # This is the global scope; closing it is an error
         self.open_scope()
+
+        # The global scope holds all the builtin functions by default.
+        for fn in builtin_functions:
+            self.insert(fn, {"type": IdType.Function})
 
 
 
@@ -112,7 +133,7 @@ class SymbolTable:
         for i in range(len(self.open_scopes)-1, -1, -1):
             if self.open_scopes[i].contains(key):
                 # Return the associated value, if the key exists in the scope
-                return self.open_scopes[i][key]
+                return self.open_scopes[i].find(key)
         # If the key isn't found, return None
         return None
 
