@@ -153,7 +153,7 @@ grammar = {
         (35, "term", "expr_prime"),
     ),
     "expr_prime": (
-        (36, tt.AddOperator, "term", "expr_prime",),
+        (36, tt.AddSubOperator, "term", "expr_prime",),
         (37, tt.SubtractOperator, "term", "expr_prime",),
         (38, None,),
     ),
@@ -161,7 +161,7 @@ grammar = {
         (39, "factor", "term_prime"),
     ),
     "term_prime": (
-        (40, tt.MultiplyOperator, "factor", "term_prime"),
+        (40, tt.MulDivModOperator, "factor", "term_prime"),
         (41, tt.DivideOperator, "factor", "term_prime"),
         (42, tt.ModulusOperator, "factor", "term_prime"),
         (43, None,),

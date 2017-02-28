@@ -123,7 +123,7 @@ grammar = {
         (35, "term", "expr_prime"),
     ),
     "expr_prime": (
-        (36, tt.AddOperator, "term", "expr_prime",),
+        (36, tt.AddSubOperator, "term", "expr_prime",),
         (37, tt.SubtractOperator, "term", "expr_prime",),
         (38, None,),
     ),
@@ -131,7 +131,7 @@ grammar = {
         (39, "factor", "term_prime"),
     ),
     "term_prime": (
-        (40, tt.MultiplyOperator, "factor", "term_prime"),
+        (40, tt.MulDivModOperator, "factor", "term_prime"),
         (41, tt.DivideOperator, "factor", "term_prime"),
         (42, tt.ModulusOperator, "factor", "term_prime"),
         (43, None,),
@@ -311,7 +311,7 @@ def generate_parser():
                         file_out.write(line)
                     else:
                         line = INDENT*2 + "else:\n" + \
-                               INDENT*3 + "Parser.raise_error(token, '%s', " \
+                               INDENT*3 + "Parser.raise_production_not_found_error(token, '%s', " \
                                           "file_reader)\n" % non_terminal
                         file_out.write(line)
                 # elif production[1] is None:       # it's an epsilon
@@ -321,7 +321,7 @@ def generate_parser():
                 #     file_out.write(line)
             if not has_epsilon_rule and in_if_statement:
                 line = INDENT*2 + "else:\n" + INDENT*3 + \
-                       "Parser.raise_error(token, '%s', file_reader)\n" % non_terminal
+                       "Parser.raise_production_not_found_error(token, '%s', file_reader)\n" % non_terminal
                 file_out.write(line)
             elif in_if_statement:
                 _id = [x[0] for x in rule_set if x[1] is None][0]
@@ -396,7 +396,7 @@ def token_is_in(token, list_of_terminals):
 raise_error_def = """
 
 
-def raise_error(current_token, non_terminal, file_reader):
+def raise_production_not_found_error(current_token, non_terminal, file_reader):
     \"\"\"
     Gets data from the file reader and formats it as an error message
     \"\"\"

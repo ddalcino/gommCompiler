@@ -56,11 +56,6 @@ class IdType(Enum):
 
 
 
-# Builtin functions; should be visible everywhere
-builtin_functions = ("print", "prints", "read_int", "read_float", "read_char")
-
-
-
 class SymbolTable:
     """
     SymbolTable is a class meant to be used in a compiler. It keeps track of
@@ -68,6 +63,17 @@ class SymbolTable:
     other metadata regarding these symbols. It supports the actions 'insert,'
     'find,' 'find_in_all_scopes,' and 'display.'
     """
+
+    # Builtin functions; should be visible everywhere
+    builtin_functions = {
+        "print":{},
+        "prints":{},
+        "read_int":{},
+        "read_float":{},
+        "read_char":{}
+    }
+
+
 
     def __init__(self):
         # an array of Scopes; each Scope represents an open scope
@@ -81,9 +87,9 @@ class SymbolTable:
         # This is the global scope; closing it is an error
         self.open_scope()
 
-        # The global scope holds all the builtin functions by default.
-        for fn in builtin_functions:
-            self.insert(fn, {"type": IdType.Function})
+        # # The global scope holds all the builtin functions by default.
+        # for fn in builtin_functions:
+        #     self.insert(fn, {"type": IdType.Function})
 
 
 
@@ -96,8 +102,10 @@ class SymbolTable:
         :return:        True if the insert occurred properly; false if not.
         """
 
-        # Disallow insertion to a scope that already has the key
-        if self.open_scopes[-1].contains(key):
+        # Disallow insertion to a scope that already has the key,
+        # or if it's a built in function
+        if self.open_scopes[-1].contains(key) or \
+                        key in SymbolTable.builtin_functions.keys():
             return False
 
         # Perform the insertion
@@ -112,6 +120,9 @@ class SymbolTable:
         :return:        the value associated with the identifier, or None if
                         the key doesn't exist in the current scope
         """
+        # if it's a built-in function,
+        if key in SymbolTable.builtin_functions.keys():
+            return SymbolTable.builtin_functions[key]
         if self.open_scopes[-1].contains(key):
             # Return the associated value, if the key exists in the scope
             return self.open_scopes[-1].find(key)
@@ -129,6 +140,9 @@ class SymbolTable:
         :return:        the value associated with the identifier, or None if
                         the key doesn't exist in any open scope
         """
+        # if it's a built-in function,
+        if key in SymbolTable.builtin_functions.keys():
+            return SymbolTable.builtin_functions[key]
         # Traverse the open scopes in reverse order
         for i in range(len(self.open_scopes)-1, -1, -1):
             if self.open_scopes[i].contains(key):

@@ -27,11 +27,8 @@ class TokenType(Enum):
     Float = 2
     Identifier = 3
     Comment = 4                 # these will be filtered out by the scanner
-    AddOperator = 5
-    SubtractOperator = 6
-    MultiplyOperator = 7
-    DivideOperator = 8
-    ModulusOperator = 9
+    AddSubOperator = 5
+    MulDivModOperator = 7
     OpenParen = 10
     CloseParen = 11
     OpenCurly = 12
@@ -58,11 +55,6 @@ class Token:
 
     # Static database of string representations:
     lexemes = {
-        TokenType.AddOperator: "+",
-        TokenType.SubtractOperator: "-",
-        TokenType.MultiplyOperator: "*",
-        TokenType.DivideOperator: "/",
-        TokenType.ModulusOperator: "%",
         TokenType.OpenParen: "(",
         TokenType.CloseParen: ")",
         TokenType.OpenCurly: "{",

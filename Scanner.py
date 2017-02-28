@@ -209,11 +209,11 @@ token_type_for_accept_state = {
     "LessThanEquals_Accept": tt.LessThanOrEqualOp,
 
     # Special characters that can only be a single-character token
-    "Add_Accept":           tt.AddOperator,
-    "Subtract_Accept":      tt.SubtractOperator,
-    "Multiply_Accept":      tt.MultiplyOperator,
-    "Divide_Accept":        tt.DivideOperator,
-    "Modulus_Accept":       tt.ModulusOperator,
+    "Add_Accept":           tt.AddSubOperator,
+    "Subtract_Accept":      tt.AddSubOperator,
+    "Multiply_Accept":      tt.MulDivModOperator,
+    "Divide_Accept":        tt.MulDivModOperator,
+    "Modulus_Accept":       tt.MulDivModOperator,
     "OpenParen_Accept":     tt.OpenParen,
     "CloseParen_Accept":    tt.CloseParen,
     "OpenBracket_Accept":   tt.OpenBracket,
