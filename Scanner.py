@@ -229,13 +229,6 @@ token_type_for_accept_state = {
 ignored_token_t = (tt.Comment, )
 
 
-# Reserved words:
-
-# List of keywords
-keywords = ("if", "else", "while", "func", "return", "int", "float", "char",
-            "var")
-
-
 
 class Scanner:
     """
@@ -340,8 +333,8 @@ class Scanner:
 
                         # filter out reserved words from identifiers
                         if token_type == tt.Identifier:
-                            if token_string in keywords:
-                                token_type = tt.Keyword
+                            if token_string in Token.keywords.keys():
+                                token_type = Token.keywords[token_string]
 
                         # return the right token
                         return Token(token_type, token_string)

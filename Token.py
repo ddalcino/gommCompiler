@@ -43,8 +43,16 @@ class TokenType(Enum):
     LessThanOperator = 21
     Comma = 22
     String = 23
-    Keyword = 24
-
+    KeywordIf = 24
+    KeywordElse = 25
+    KeywordWhile = 26
+    KeywordFunc = 27
+    KeywordReturn = 28
+    KeywordInt = 29
+    KeywordFloat = 30
+    KeywordChar = 31
+    KeywordVar = 32
+    KeywordBool = 33
 
 
 
@@ -66,7 +74,32 @@ class Token:
         TokenType.EqualityOperator: "==",
         TokenType.NotEqualOperator: "!=",
         TokenType.LessThanOrEqualOp: "<=",
-        TokenType.LessThanOperator: "<"
+        TokenType.LessThanOperator: "<",
+        TokenType.KeywordBool: "bool",
+        TokenType.KeywordChar: "char",
+        TokenType.KeywordElse: "else",
+        TokenType.KeywordFloat: "float",
+        TokenType.KeywordFunc: "func",
+        TokenType.KeywordIf: "if",
+        TokenType.KeywordInt: "int",
+        TokenType.KeywordReturn: "return",
+        TokenType.KeywordVar: "var",
+        TokenType.KeywordWhile: "while",
+    }
+
+
+    # Static translation table from lexeme to keyword
+    keywords = {
+        "bool":     TokenType.KeywordBool,
+        "char":     TokenType.KeywordChar,
+        "else":     TokenType.KeywordElse,
+        "float":    TokenType.KeywordFloat,
+        "func":     TokenType.KeywordFunc,
+        "if":       TokenType.KeywordIf,
+        "int":      TokenType.KeywordInt,
+        "return":   TokenType.KeywordReturn,
+        "var":      TokenType.KeywordVar,
+        "while":    TokenType.KeywordWhile,
     }
 
 
@@ -129,21 +162,4 @@ class Token:
         return isinstance(other_token, Token) and\
             self.t_type == other_token.t_type and \
             self.lexeme == other_token.lexeme
-
-
-
-class Keyword:
-    """ Holds a list of keyword tokens; meant to be constant. """
-
-    IF = Token(TokenType.Keyword, "if")
-    ELSE = Token(TokenType.Keyword, "else")
-    WHILE = Token(TokenType.Keyword, "while")
-    FUNC = Token(TokenType.Keyword, "func")
-    RETURN = Token(TokenType.Keyword, "return")
-    INT = Token(TokenType.Keyword, "int")
-    FLOAT = Token(TokenType.Keyword, "float")
-    CHAR = Token(TokenType.Keyword, "char")
-    VAR = Token(TokenType.Keyword, "var")
-
-
 

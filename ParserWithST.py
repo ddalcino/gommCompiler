@@ -21,7 +21,7 @@ The grammar implemented is summarized here:
     1 <function_decl> {<function_decl>} |
     2 <Epsilon>
 <function_decl> ==>
-    3 Keyword.FUNC TokenType.Identifier TokenType.OpenParen <param_list>
+    3 TokenType.KeywordFunc TokenType.Identifier TokenType.OpenParen <param_list>
         TokenType.CloseParen <return_identifier> <return_datatype>
         <code_block>
 <param_list> ==>
@@ -29,15 +29,15 @@ The grammar implemented is summarized here:
         {TokenType.Comma TokenType.Identifier <datatype>}  |
     5 <Epsilon>
 <datatype> ==>
-    8 Keyword.INT |
-    9 Keyword.FLOAT |
-    10 Keyword.CHAR |
+    8 TokenType.KeywordInt |
+    9 TokenType.KeywordFloat |
+    10 TokenType.KeywordChar |
     11 TokenType.OpenBracket TokenType.Integer TokenType.CloseBracket
         <array_of_datatype>
 <array_of_datatype> ==>
-    12 Keyword.INT |
-    13 Keyword.FLOAT |
-    14 Keyword.CHAR
+    12 TokenType.KeywordInt |
+    13 TokenType.KeywordFloat |
+    14 TokenType.KeywordChar
 <return_identifier> ==>
     15 TokenType.Identifier
 <return_datatype> ==>
@@ -46,10 +46,10 @@ The grammar implemented is summarized here:
     17 <basic_statement> {<basic_statement>} |
     18 <Epsilon>
 <basic_statement> ==>
-    19 Keyword.RETURN TokenType.Semicolon |
-    20 Keyword.IF <remaining_if_statement> |
-    21 Keyword.WHILE <remaining_while_statement> |
-    22 Keyword.VAR TokenType.Identifier <datatype> TokenType.Semicolon |
+    19 TokenType.KeywordReturn TokenType.Semicolon |
+    20 TokenType.KeywordIf <remaining_if_statement> |
+    21 TokenType.KeywordWhile <remaining_while_statement> |
+    22 TokenType.KeywordVar TokenType.Identifier <datatype> TokenType.Semicolon |
     23 TokenType.Identifier <assignment_or_function_call> TokenType.Semicolon
 <assignment_or_function_call> ==>
     24 TokenType.AssignmentOperator <expression> |
@@ -65,27 +65,20 @@ The grammar implemented is summarized here:
     31 TokenType.OpenParen <boolean_expression> TokenType.CloseParen
         <code_block> <else_clause>
 <else_clause> ==>
-    32 Keyword.ELSE <code_block> |
+    32 TokenType.KeywordElse <code_block> |
     33 <Epsilon>
 <remaining_while_statement> ==>
     34 TokenType.OpenParen <boolean_expression> TokenType.CloseParen
         <code_block>
 <expression> ==>
-    35 <term> <expr_prime>
-<expr_prime> ==>
-    36 TokenType.AddSubOperator <term> <expr_prime> |
-    38 <Epsilon>
+    35 <term> { TokenType.AddSubOperator <term> }
 <term> ==>
-    39 <factor> <term_prime>
-<term_prime> ==>
-    40 TokenType.MulDivModOperator <factor> <term_prime> |
-    43 <Epsilon>
+    39 <factor> { TokenType.MulDivModOperator <factor> }
 <factor> ==>
     44 TokenType.OpenParen <expression> TokenType.CloseParen |
     45 TokenType.Identifier <variable_or_function_call> |
     46 TokenType.Float |
-    47 TokenType.Integer |
-    48 TokenType.String
+    47 TokenType.Integer
 <variable_or_function_call> ==>
     49 TokenType.OpenBracket <expression> TokenType.CloseBracket |
     50 TokenType.OpenParen <expression_list> TokenType.CloseParen |
@@ -100,11 +93,12 @@ The grammar implemented is summarized here:
 
 """
 
-from Token import TokenType, Keyword, Token
+from Token import TokenType, Token
 from Scanner import Scanner
 from FileReader import FileReader
 from SymbolTable import SymbolTable, IdType
 import os
+import traceback
 #
 #
 # s_table = SymbolTable()
@@ -136,24 +130,22 @@ class Parser:
     
     
     @staticmethod
-    def match(current_token, expected, file_reader):
+    def match(current_token, expected_tt, file_reader):
         """
-        Matches the current token with an expected token or token type,
+        Matches the current token with an expected_tt token or token type,
         then reads the next token from the scanner.
         If a match cannot be made, raises a Parser.Error object.
         :param current_token:   The current token being read
-        :param expected:        Either an expected Token (in the case of a
-                                particular keyword) or a TokenType
+        :param expected_tt:     The expected TokenType
         :param file_reader:     The FileReader from which to read the next token
         :return:                None
         """
         assert(isinstance(current_token, Token))
-        assert(isinstance(expected, Token) or
-               isinstance(expected, TokenType))
+        assert(isinstance(expected_tt, TokenType))
         assert(isinstance(file_reader, FileReader))
     
-        # If the current token matches the expected token, or token type,
-        if current_token.equals(expected) or current_token.t_type == expected:
+        # If the current token matches the expected_tt token, or token type,
+        if current_token.t_type == expected_tt:
             # then get the next token and put it in current_token
             current_token.assignTo(Scanner.get_token(file_reader))
         else:
@@ -163,7 +155,7 @@ class Parser:
                 "At line %d, column %d: " % (line_data["Line_Num"],
                                              line_data["Column"]) +
                 "Tried to match %r with %r, but they were unequal.\n" %
-                (current_token, expected) +
+                (current_token, expected_tt) +
                 "%s" % line_data["Line"] +
                 " " * line_data["Column"] + "^\n"
             )
@@ -192,12 +184,15 @@ class Parser:
         """
         try:
             for terminal in list_of_terminals:
-                if token.equals(terminal) or token.t_type == terminal:
+                if token.t_type == terminal:
                     return True
             return False
+
+        # This exception is raised if list_of_terminals is not an iterable
+        # list, but is in fact a single terminal
         except TypeError as e:
             terminal = list_of_terminals
-            return token.equals(terminal) or token.t_type == terminal
+            return token.t_type == terminal
         
     
     
@@ -320,8 +315,8 @@ class Parser:
             <function_decl> {<function_decl>} |
             <Epsilon>
         """
-        if Parser.token_is_in(token, (Keyword.FUNC,)):
-            while Parser.token_is_in(token, (Keyword.FUNC,)):
+        if Parser.token_is_in(token, (TokenType.KeywordFunc,)):
+            while Parser.token_is_in(token, (TokenType.KeywordFunc,)):
                 print(1, end=" ")
                 Parser.function_decl(token, file_reader)
             # Parser.program(token, file_reader)
@@ -335,14 +330,14 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <function_decl> ==>
-            Keyword.FUNC TokenType.Identifier TokenType.OpenParen <param_list>
+            TokenType.KeywordFunc TokenType.Identifier TokenType.OpenParen <param_list>
             TokenType.CloseParen <return_identifier> <return_datatype>
             <code_block>
         """
-        if token.equals(Keyword.FUNC):
+        if token.t_type == TokenType.KeywordFunc:
             print("")
             print(3, end=" ")
-            Parser.match(token, Keyword.FUNC, file_reader)
+            Parser.match(token, TokenType.KeywordFunc, file_reader)
 
             # add the function identifier to the symbol table
             function_id = token.lexeme
@@ -430,24 +425,24 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <datatype> ==>
-            Keyword.INT |
-            Keyword.FLOAT |
-            Keyword.CHAR |
+            TokenType.KeywordInt |
+            TokenType.KeywordFloat |
+            TokenType.KeywordChar |
             TokenType.OpenBracket TokenType.Integer TokenType.CloseBracket
             <array_of_datatype>
         :return:    The datatype, as a SymbolTable.IdType enum
         """
-        if token.equals(Keyword.INT):
+        if token.t_type == TokenType.KeywordInt:
             print(8, end=" ")
-            Parser.match(token, Keyword.INT, file_reader)
+            Parser.match(token, TokenType.KeywordInt, file_reader)
             return IdType.Integer
-        elif token.equals(Keyword.FLOAT):
+        elif token.t_type == TokenType.KeywordFloat:
             print(9, end=" ")
-            Parser.match(token, Keyword.FLOAT, file_reader)
+            Parser.match(token, TokenType.KeywordFloat, file_reader)
             return IdType.Float
-        elif token.equals(Keyword.CHAR):
+        elif token.t_type == TokenType.KeywordChar:
             print(10, end=" ")
-            Parser.match(token, Keyword.CHAR, file_reader)
+            Parser.match(token, TokenType.KeywordChar, file_reader)
             return IdType.Char
         elif token.t_type == TokenType.OpenBracket:
             print(11, end=" ")
@@ -466,22 +461,22 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <array_of_datatype> ==>
-            Keyword.INT |
-            Keyword.FLOAT |
-            Keyword.CHAR
+            TokenType.KeywordInt |
+            TokenType.KeywordFloat |
+            TokenType.KeywordChar
         :return:    The datatype, as a SymbolTable.IdType enum
         """
-        if token.equals(Keyword.INT):
+        if token.t_type == TokenType.KeywordInt:
             print(12, end=" ")
-            Parser.match(token, Keyword.INT, file_reader)
+            Parser.match(token, TokenType.KeywordInt, file_reader)
             return IdType.ArrayInteger
-        elif token.equals(Keyword.FLOAT):
+        elif token.t_type == TokenType.KeywordFloat:
             print(13, end=" ")
-            Parser.match(token, Keyword.FLOAT, file_reader)
+            Parser.match(token, TokenType.KeywordFloat, file_reader)
             return  IdType.ArrayFloat
-        elif token.equals(Keyword.CHAR):
+        elif token.t_type == TokenType.KeywordChar:
             print(14, end=" ")
-            Parser.match(token, Keyword.CHAR, file_reader)
+            Parser.match(token, TokenType.KeywordChar, file_reader)
             return IdType.ArrayChar
         else:
             Parser.raise_production_not_found_error(token, 'array_of_datatype',
@@ -513,7 +508,7 @@ class Parser:
             <datatype>
         :return:    The datatype, as a SymbolTable.IdType enum
         """
-        if Parser.token_is_in(token, (Keyword.INT, Keyword.FLOAT, Keyword.CHAR,
+        if Parser.token_is_in(token, (TokenType.KeywordInt, TokenType.KeywordFloat, TokenType.KeywordChar,
                                       TokenType.OpenBracket)):
             print(16, end=" ")
             return Parser.datatype(token, file_reader)
@@ -531,10 +526,10 @@ class Parser:
             <basic_statement> {<basic_statement>} |
             <Epsilon>
         """
-        if Parser.token_is_in(token, (Keyword.RETURN, Keyword.IF, Keyword.WHILE,
-                                      Keyword.VAR, TokenType.Identifier)):
-            while Parser.token_is_in(token, (Keyword.RETURN, Keyword.IF,
-                                             Keyword.WHILE, Keyword.VAR,
+        if Parser.token_is_in(token, (TokenType.KeywordReturn, TokenType.KeywordIf, TokenType.KeywordWhile,
+                                      TokenType.KeywordVar, TokenType.Identifier)):
+            while Parser.token_is_in(token, (TokenType.KeywordReturn, TokenType.KeywordIf,
+                                             TokenType.KeywordWhile, TokenType.KeywordVar,
                                              TokenType.Identifier)):
                 print("")
                 print(17, end=" ")
@@ -549,28 +544,28 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <basic_statement> ==>
-            Keyword.RETURN TokenType.Semicolon |
-            Keyword.IF <remaining_if_statement> |
-            Keyword.WHILE <remaining_while_statement> |
-            Keyword.VAR TokenType.Identifier <datatype> TokenType.Semicolon |
+            TokenType.KeywordReturn TokenType.Semicolon |
+            TokenType.KeywordIf <remaining_if_statement> |
+            TokenType.KeywordWhile <remaining_while_statement> |
+            TokenType.KeywordVar TokenType.Identifier <datatype> TokenType.Semicolon |
             TokenType.Identifier <assignment_or_function_call>
             TokenType.Semicolon
         """
-        if token.equals(Keyword.RETURN):
+        if token.t_type == TokenType.KeywordReturn:
             print(19, end=" ")
-            Parser.match(token, Keyword.RETURN, file_reader)
+            Parser.match(token, TokenType.KeywordReturn, file_reader)
             Parser.match(token, TokenType.Semicolon, file_reader)
-        elif token.equals(Keyword.IF):
+        elif token.t_type == TokenType.KeywordIf:
             print(20, end=" ")
-            Parser.match(token, Keyword.IF, file_reader)
+            Parser.match(token, TokenType.KeywordIf, file_reader)
             Parser.remaining_if_statement(token, file_reader)
-        elif token.equals(Keyword.WHILE):
+        elif token.t_type == TokenType.KeywordWhile:
             print(21, end=" ")
-            Parser.match(token, Keyword.WHILE, file_reader)
+            Parser.match(token, TokenType.KeywordWhile, file_reader)
             Parser.remaining_while_statement(token, file_reader)
-        elif token.equals(Keyword.VAR):
+        elif token.t_type == TokenType.KeywordVar:
             print(22, end=" ")
-            Parser.match(token, Keyword.VAR, file_reader)
+            Parser.match(token, TokenType.KeywordVar, file_reader)
 
             # get the param's identifier and datatype
             identifier = token.lexeme
@@ -672,6 +667,7 @@ class Parser:
                 Parser.statement_list(token, file_reader)
             except Parser.Error as ex:
                 print("\nException occurred while parsing code block:\n%s" % ex)
+                print(traceback.format_exc())
                 Parser.skip_tokens_if_not(TokenType.CloseCurly, token,
                                           file_reader)
 
@@ -711,13 +707,12 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <else_clause> ==>
-            Keyword.ELSE TokenType.OpenCurly <statement_list>
-            TokenType.CloseCurly |
+            TokenType.KeywordElse <code_block> |
             <Epsilon>
         """
-        if token.equals(Keyword.ELSE):
+        if token.t_type == TokenType.KeywordElse:
             print(32, end=" ")
-            Parser.match(token, Keyword.ELSE, file_reader)
+            Parser.match(token, TokenType.KeywordElse, file_reader)
             Parser.code_block(token, file_reader)
         else:
             print(33, end=" ")
@@ -749,34 +744,18 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <expression> ==>
-            <term> <expr_prime>
+            35 <term> { TokenType.AddSubOperator <term> }
         """
         if Parser.token_is_in(token, (TokenType.OpenParen, TokenType.Identifier,
                 TokenType.Float, TokenType.Integer, TokenType.String)):
             print(35, end=" ")
             Parser.term(token, file_reader)
-            Parser.expr_prime(token, file_reader)
+            while token.t_type == TokenType.AddSubOperator:
+                Parser.match(token, TokenType.AddSubOperator, file_reader)
+                Parser.term(token, file_reader)
         else:
             Parser.raise_production_not_found_error(
                 token, 'expression', file_reader)
-
-
-
-    @staticmethod
-    def expr_prime(token, file_reader):
-        """
-        Implements recursive descent for the rule:
-        <expr_prime> ==>
-            TokenType.AddSubOperator <term> <expr_prime> |
-            <Epsilon>
-        """
-        if token.t_type == TokenType.AddSubOperator:
-            print(36, end=" ")
-            Parser.match(token, TokenType.AddSubOperator, file_reader)
-            Parser.term(token, file_reader)
-            Parser.expr_prime(token, file_reader)
-        else:
-            print(38, end=" ")
 
 
 
@@ -785,33 +764,17 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <term> ==>
-            <factor> <term_prime>
+            39 <factor> { TokenType.MulDivModOperator <factor> }
         """
         if Parser.token_is_in(token, (TokenType.OpenParen, TokenType.Identifier,
                 TokenType.Float, TokenType.Integer, TokenType.String)):
             print(39, end=" ")
             Parser.factor(token, file_reader)
-            Parser.term_prime(token, file_reader)
+            while token.t_type == TokenType.MulDivModOperator:
+                Parser.match(token, TokenType.MulDivModOperator, file_reader)
+                Parser.factor(token, file_reader)
         else:
             Parser.raise_production_not_found_error(token, 'term', file_reader)
-
-
-
-    @staticmethod
-    def term_prime(token, file_reader):
-        """
-        Implements recursive descent for the rule:
-        <term_prime> ==>
-            TokenType.MulDivModOperator <factor> <term_prime> |
-            <Epsilon>
-        """
-        if token.t_type == TokenType.MulDivModOperator:
-            print(40, end=" ")
-            Parser.match(token, TokenType.MulDivModOperator, file_reader)
-            Parser.factor(token, file_reader)
-            Parser.term_prime(token, file_reader)
-        else:
-            print(43, end=" ")
 
 
 
