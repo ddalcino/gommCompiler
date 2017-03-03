@@ -13,6 +13,32 @@ class ExpressionRecord:
         return str(self.data_type).split('.')[-1] + " @%d" % self.loc
 
 
+
+class FunctionSignature:
+    def __init__(self, identifier, label=None,
+                 #param_list_ids,
+                 param_list_types=None,
+                 #return_id,
+                 return_type=None):
+        #assert(len(param_list_types) == len(param_list_ids))
+        # for type in param_list_types:
+        #     assert(isinstance(type, DataTypes))
+        # assert(isinstance(return_type, DataTypes))
+
+        self.identifier = identifier
+        self.label = label
+        #self.param_list_ids = param_list_ids
+        self.param_list_types = param_list_types
+        #self.return_id = return_id
+        self.return_type = return_type
+
+    def __str__(self):
+        params_str = ', '.join(
+            [str(x).split('.')[-1] for x in self.param_list_types])
+        return_type_str = str(self.return_type).split('.')[-1]
+        return self.identifier + "(" + params_str + ") " + return_type_str
+
+
 class CG:
     """
     CG: short for Code Generator
@@ -58,30 +84,33 @@ class CG:
     }
 
     MIPS_TYPES = {
-        DataTypes.STRING: (".asciiz", '"%s"'),
+        DataTypes.STRING: (".asciiz", '%s'),
         DataTypes.INT: (".word", '%d'),
         DataTypes.FLOAT: (".float", '%f'),
         DataTypes.CHAR: (".byte", '%c'),    #FIXME
     }
 
+    BUILT_IN_FUNCTIONS = {}
+
     PROLOGUE = '\t.text\n' \
                '\t.globl main\n' \
                'main:\n' \
-               '\tmove\t$fp $sp\n' \
-               '\tla $a0 ProgStart\n' \
-               '\tli $v0 4                    # Print Syscall\n' \
+               '\tmove\t$fp,$sp\n' \
+               '\tla $a0,ProgStart\n' \
+               '\tli $v0,4                    # Print Syscall\n' \
                '\tsyscall\n'
 
-    EPILOGUE = '\tla $a0 ProgEnd\n' \
-               '\tli $v0 4                    # Print Syscall\n' \
+    EPILOGUE = '\tla $a0,ProgEnd\n' \
+               '\tli $v0,4                    # Print Syscall\n' \
                '\tsyscall\n' \
-               '\tli $v0 10                   # Exit Syscall\n' \
+               '\tli $v0,10                   # Exit Syscall\n' \
                '\tsyscall\n' \
                '\t.data\n' \
                'ProgStart:\t.asciiz\t"Program Start\\n"\n' \
                'ProgEnd:\t.asciiz\t"Program End\\n"\n'
 
     LINE_ENDING = "\n"                  # "\r\n" for windows
+
 
     #################################################################
     # STATIC MEMBER FUNCTIONS:
@@ -104,6 +133,15 @@ class CG:
             "string": 0,
             "float": 0,
             "function": 0,
+            "else": 0,
+            "after_else": 0,
+            "while": 0,
+        }
+        CG.BUILT_IN_FUNCTIONS = {
+            "print": CG.gen_print,
+            "read_int": CG.gen_read_int,
+            "read_float": CG.gen_read_float,
+            "read_char": CG.gen_read_char,
         }
 
 
@@ -120,6 +158,31 @@ class CG:
         label = "float_lbl_%d" % CG.num_labels_made["float"]
         CG.num_labels_made["float"] += 1
         return label
+
+
+
+    @staticmethod
+    def gen_else_label():
+        label = "else_lbl_%d" % CG.num_labels_made["else"]
+        CG.num_labels_made["else"] += 1
+        return label
+
+
+
+    @staticmethod
+    def gen_after_else_label():
+        label = "after_else_lbl_%d" % CG.num_labels_made["after_else"]
+        CG.num_labels_made["after_else"] += 1
+        return label
+
+
+
+    @staticmethod
+    def gen_while_labels():
+        before_label = "while_lbl_%d" % CG.num_labels_made["while"]
+        after_label = "after_while_lbl_%d" % CG.num_labels_made["while"]
+        CG.num_labels_made["while"] += 1
+        return before_label, after_label
 
 
 
@@ -291,7 +354,7 @@ class CG:
         if comment is not None:
             f_comment = "# " + comment
 
-        line_of_code = label + "\t\t\t" + f_comment
+        line_of_code = label + ":\t\t\t" + f_comment
         CG.output(line_of_code)
 
 
@@ -313,10 +376,12 @@ class CG:
         Prints a comment on its own line of code.
         :param comment:     The comment to print
         """
-        CG.output(".data")
+        CG.output("")
+        CG.output("\t.data")
         CG.output(label + ":\t" + CG.MIPS_TYPES[data_type][0] + "\t" +
                   CG.MIPS_TYPES[data_type][1] % value)
-        CG.output(".text")
+        CG.output("")
+        CG.output("\t.text")
 
 
 
@@ -326,13 +391,13 @@ class CG:
         Reserves space on the stack for a variable.
         :param data_type:   A Token.DataTypes object
         :param identifier:  The variable's id (for comment)
-        :param size:
+        :param size:        Number of bytes to reserve
         :return:
         """
         var = ExpressionRecord(data_type=data_type, loc=CG.next_offset)
         CG.next_offset -= 4*size
-        CG.code_gen_comment("Space reserved on stack for var %s at %d($sp)" %
-                            (identifier, var.loc))
+        CG.code_gen_comment("Reserved %d bytes on stack for var %s at %d($sp)" %
+                            (size, identifier, var.loc))
         return var
 
 
@@ -393,6 +458,30 @@ class CG:
 
 
 
+    @staticmethod
+    def code_gen_if(er_lhs, operator, er_rhs, lbl_on_failed_test):
+
+        if operator == TokenType.EqualityOperator:
+            CG.code_gen("lw", "$t0", "%d($sp)" % er_lhs.loc)
+            CG.code_gen("lw", "$t1", "%d($sp)" % er_rhs.loc)
+            CG.code_gen("bne", "$t0", "$t1", lbl_on_failed_test)
+            pass
+        elif operator == TokenType.NotEqualOperator:
+            CG.code_gen("lw", "$t0", "%d($sp)" % er_lhs.loc)
+            CG.code_gen("lw", "$t1", "%d($sp)" % er_rhs.loc)
+            CG.code_gen("beq", "$t0", "$t1", lbl_on_failed_test)
+        elif operator == TokenType.LessThanOrEqualOp:
+            CG.code_gen("lw", "$t0", "%d($sp)" % er_lhs.loc)
+            CG.code_gen("lw", "$t1", "%d($sp)" % er_rhs.loc)
+            CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
+            CG.code_gen("bgtz", "$t0", lbl_on_failed_test)
+        elif operator == TokenType.LessThanOperator:
+            CG.code_gen("lw", "$t0", "%d($sp)" % er_lhs.loc)
+            CG.code_gen("lw", "$t1", "%d($sp)" % er_rhs.loc)
+            CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
+            CG.code_gen("bgez", "$t0", lbl_on_failed_test)
+
+
 
     @staticmethod
     def array_subscript_to_stack_entry(er_array, er_subscript):
@@ -421,13 +510,15 @@ class CG:
     #     read_char
 
     @staticmethod
-    def gen_print(exp_rec):
+    def gen_print(exp_rec_list):
         """
         Generates inline code that calls the syscall for the appropriate
         print function
         :param exp_rec:     the ExpressionRecord that holds the value we want
                             to print
         """
+        assert(len(exp_rec_list) == 1)
+        exp_rec = exp_rec_list[0]
         assert(isinstance(exp_rec, ExpressionRecord))
         if exp_rec.data_type == DataTypes.INT:
             CG.code_gen("lw", "$a0", "%d($sp)" % exp_rec.loc,
@@ -480,7 +571,7 @@ class CG:
 
 
     @staticmethod
-    def gen_read_int(exp_rec):
+    def gen_read_char(exp_rec):
         """
         Generates code that calls the read_char syscall.
         :param exp_rec: the ExpressionRecord in which to store the result
@@ -505,6 +596,9 @@ class CG:
 
         # Reserve space on the stack for the return value
 
-        # Calculate the distance from the
+        # Calculate the size of the stack, and put the stack pointer on top
+        # of it
+
+        # Reserve new space for the parameters, passed by value
 
 

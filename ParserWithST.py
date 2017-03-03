@@ -122,7 +122,7 @@ from Scanner import Scanner
 from FileReader import FileReader
 from SymbolTable import SymbolTable #, IdType
 from Errors import *
-from CodeGenerator import CG
+from CodeGenerator import CG, FunctionSignature
 import os
 import traceback
 
@@ -346,15 +346,19 @@ class Parser:
             # check that the identifier hasn't already been declared
             Parser.error_on_variable_usage(function_id, is_decl_stmt=True)
 
-            function_dict = {}
-            Parser.s_table.insert(function_id, function_dict)
+            func_signature = FunctionSignature(function_id)
+            Parser.s_table.insert(function_id, func_signature)
 
             # open a new scope
             Parser.s_table.open_scope()
 
             Parser.match(token, TokenType.Identifier)
             Parser.match(token, TokenType.OpenParen)
-            Parser.param_list(token)
+
+            param_exp_rec_list = Parser.param_list(token)
+            param_types = [x.data_type for x in param_exp_rec_list]
+            func_signature.param_list_types = param_types
+
             Parser.match(token, TokenType.CloseParen)
 
             return_val_id = token.lexeme
@@ -364,16 +368,16 @@ class Parser:
             er_return_val = CG.declare_variable(return_val_type, return_val_id)
             Parser.s_table.insert(return_val_id, er_return_val)
 
-            function_dict["return_type"] = return_val_type
-            function_dict["type"] = \
-                DataTypes.function_that_returns_type(return_val_type)
-            function_dict["return_val_id"] = return_val_id
-            function_dict["label"] = CG.gen_function_label(function_id)
+            func_signature.return_type = return_val_type
+            label = CG.gen_function_label(function_id)
+            func_signature.label = label
             # TODO: fit param list into function_dict
 
-            CG.code_gen_label(function_dict["label"],
-                              "Returns %r in variable %s" %
-                              (return_val_type, return_val_id))
+            CG.code_gen_label(label, str(func_signature))
+
+            func_signature = FunctionSignature(
+                identifier=function_id, label=label,
+                param_list_types=param_types, return_type=return_val_type)
 
             Parser.match(token, TokenType.OpenCurly)
             Parser.statement_list(token)
@@ -597,16 +601,18 @@ class Parser:
             <expression> {, <expression>} |
             <Epsilon>
         """
+        return_list = []
         if token.t_type in \
                 (TokenType.OpenParen, TokenType.Identifier, TokenType.Float,
                  TokenType.Integer, TokenType.String):
             print(27, end=" ")
-            Parser.expression(token)
+            return_list.append(Parser.expression(token))
             while token.t_type == TokenType.Comma:
                 Parser.match(token, TokenType.Comma)
-                Parser.expression(token)
+                return_list.append(Parser.expression(token))
         else:
             print(28, end=" ")
+        return return_list
 
 
 
@@ -666,14 +672,34 @@ class Parser:
             print(31, end=" ")
             Parser.match(token, TokenType.KeywordIf)
             Parser.match(token, TokenType.OpenParen)
-            Parser.boolean_expression(token)
+            er_lhs, op, er_rhs = Parser.boolean_expression(token)
             Parser.match(token, TokenType.CloseParen)
+
+            else_label = CG.gen_else_label()
+            CG.code_gen_if(er_lhs, op, er_rhs, else_label)
 
             Parser.code_block(token)
 
             if token.t_type == TokenType.KeywordElse:
                 Parser.match(token, TokenType.KeywordElse)
+
+                # the last code block must branch to after the else clause
+                after_else_label = CG.gen_after_else_label()
+                CG.code_gen("b", after_else_label)
+
+                # if test failed, then pick up program execution here
+                CG.code_gen_label(else_label)
+
+                # generate the else block
                 Parser.code_block(token)
+
+                # make the after_else label
+                CG.code_gen_label(after_else_label)
+
+            else:
+                # if test failed, then pick up program execution here
+                CG.code_gen_label(else_label)
+
         else:
             Parser.raise_production_not_found_error(
                 token, 'if_statement')
@@ -725,9 +751,26 @@ class Parser:
             print(34, end=" ")
             Parser.match(token, TokenType.KeywordWhile)
             Parser.match(token, TokenType.OpenParen)
-            Parser.boolean_expression(token)
+            er_lhs, operator, er_rhs = Parser.boolean_expression(token)
             Parser.match(token, TokenType.CloseParen)
+
+            before_while_lbl, after_while_lbl = CG.gen_while_labels()
+
+            # Write label for beginning of while loop
+            CG.code_gen_label(before_while_lbl)
+
+            # Perform the test
+            CG.code_gen_if(er_lhs, operator, er_rhs, after_while_lbl)
+
+            # Write the contents of the loop
             Parser.code_block(token)
+
+            # Branch back to the test again
+            CG.code_gen("b", before_while_lbl)
+
+            # Write label for end of while loop, to pick up when the test fails
+            CG.code_gen_label(after_while_lbl)
+
         else:
             Parser.raise_production_not_found_error(
                 token, 'while_statement')
@@ -777,9 +820,14 @@ class Parser:
             elif token.t_type == TokenType.OpenParen:
                 print(26, end=" ")
                 Parser.match(token, TokenType.OpenParen)
-                Parser.expression_list(token)
+                er_list = Parser.expression_list(token)
                 Parser.match(token, TokenType.CloseParen)
                 Parser.match(token, TokenType.Semicolon)
+
+                # First handle built-in functions
+                if identifier in CG.BUILT_IN_FUNCTIONS.keys():
+                    CG.BUILT_IN_FUNCTIONS[identifier](er_list)
+
 
                 # TODO: implement function calls
                 # er_rhs = call function with params
@@ -940,9 +988,11 @@ class Parser:
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer, TokenType.String):
             print(52, end=" ")
-            Parser.expression(token)
+            er_lhs = Parser.expression(token)
+            operator = token.t_type
             Parser.boolean_comparator(token)
-            Parser.expression(token)
+            er_rhs = Parser.expression(token)
+            return er_lhs, operator, er_rhs
         else:
             Parser.raise_production_not_found_error(
                 token, 'boolean_expression')
@@ -977,7 +1027,7 @@ class Parser:
 
 
 
-test_file_dir = "/home/dave/PycharmProjects/Compiler/testParserST/"
+test_file_dir = "/home/dave/PycharmProjects/Compiler/testCodeGen/"
 # "C:/Users/Dave/PycharmProjects/compiler/unusedTestPrograms/" #
 output_file_dir = "/home/dave/PycharmProjects/Compiler/asmOutput/"
 # "C:/Users/Dave/PycharmProjects/compiler/asmOutput/" #
@@ -990,7 +1040,7 @@ if __name__ == "__main__":
         # Prepend the path of the test file directory
         input_filename = test_file_dir + f
 
-        output_filename = output_file_dir + f
+        output_filename = output_file_dir + f + ".asm"
 
         print("\nParsing file " + f)
 
