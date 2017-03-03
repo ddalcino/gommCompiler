@@ -25,9 +25,10 @@ class TokenType(Enum):
     EndOfFile = -1
     Integer = 1
     Float = 2
-    Identifier = 3
-    Comment = 4                 # these will be filtered out by the scanner
-    AddSubOperator = 5
+    Char = 3
+    Identifier = 4
+    Comment = 5                 # these will be filtered out by the scanner
+    AddSubOperator = 6
     MulDivModOperator = 7
     OpenParen = 10
     CloseParen = 11
@@ -53,6 +54,56 @@ class TokenType(Enum):
     KeywordChar = 31
     KeywordVar = 32
     KeywordBool = 33
+
+
+
+class DataTypes(Enum):
+    """ An enumeration for basic datatypes """
+    INT = 1
+    FLOAT = 2
+    CHAR = 3
+    STRING = 4
+    ARRAY_INT = 5
+    ARRAY_FLOAT = 6
+    ARRAY_CHAR = 7
+    ARRAY_STRING = 8
+    FUNC_INT = 9
+    FUNC_FLOAT = 10
+    FUNC_CHAR = 11
+    FUNC_STRING = 12
+    FUNC_ARRAY_INT = 13
+    FUNC_ARRAY_FLOAT = 14
+    FUNC_ARRAY_CHAR = 15
+    FUNC_ARRAY_STRING = 16
+
+
+
+    @staticmethod
+    def basic_to_array(data_type):
+        mapping = {
+            DataTypes.INT: DataTypes.ARRAY_INT,
+            DataTypes.FLOAT: DataTypes.ARRAY_FLOAT,
+            DataTypes.CHAR: DataTypes.ARRAY_CHAR,
+            DataTypes.STRING: DataTypes.ARRAY_STRING
+        }
+        return mapping[data_type]
+
+
+
+    @staticmethod
+    def function_that_returns_type(return_type):
+        mapping = {
+            DataTypes.INT: DataTypes.FUNC_INT,
+            DataTypes.FLOAT: DataTypes.FUNC_FLOAT,
+            DataTypes.CHAR: DataTypes.FUNC_CHAR,
+            DataTypes.STRING: DataTypes.FUNC_STRING,
+            DataTypes.ARRAY_INT: DataTypes.FUNC_ARRAY_INT,
+            DataTypes.ARRAY_FLOAT: DataTypes.FUNC_ARRAY_FLOAT,
+            DataTypes.ARRAY_CHAR: DataTypes.FUNC_ARRAY_CHAR,
+            DataTypes.ARRAY_STRING: DataTypes.FUNC_ARRAY_STRING,
+        }
+        return mapping[return_type]
+
 
 
 

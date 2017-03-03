@@ -43,19 +43,6 @@ class Scope:
 
 
 
-class IdType(Enum):
-    """ An enumeration for types of identifiers """
-    Integer = 1
-    Float = 2
-    Char = 3
-    String = 4
-    Function = 5
-    ArrayInteger = 6
-    ArrayFloat = 7
-    ArrayChar = 8
-
-
-
 class SymbolTable:
     """
     SymbolTable is a class meant to be used in a compiler. It keeps track of
@@ -66,11 +53,10 @@ class SymbolTable:
 
     # Builtin functions; should be visible everywhere
     builtin_functions = {
-        "print":{},
-        "prints":{},
-        "read_int":{},
-        "read_float":{},
-        "read_char":{}
+        "print": {},
+        "read_int": {},
+        "read_float": {},
+        "read_char": {}
     }
 
 
