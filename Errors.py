@@ -1,4 +1,3 @@
-from ParserWithST import Parser
 
 #################################################################
 # ERROR CLASSES
@@ -46,14 +45,13 @@ class ProductionNotFoundError(ParseError):
 
 
 class SemanticError(Exception):
-    def __init__(self, message):
-        line_data = Parser.file_reader.get_line_data()
+    def __init__(self, message, line_data):
         full_msg = \
             "At line %d, column %d: " % (line_data["Line_Num"],
                                          line_data["Column"]) + \
             message + \
             "\n%s" % line_data["Line"] + \
             " " * line_data["Column"] + "^\n"
-        Exception.__init__(self, message)
+        Exception.__init__(self, full_msg)
 
 

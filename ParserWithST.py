@@ -122,7 +122,7 @@ from Scanner import Scanner
 from FileReader import FileReader
 from SymbolTable import SymbolTable #, IdType
 from Errors import *
-from CodeGenerator import CG, FunctionSignature
+from CodeGenerator import CG, FunctionSignature, ExpressionRecord
 import os
 import traceback
 
@@ -169,7 +169,7 @@ class Parser:
 
             with open(asm_output_filename, 'w') as file_out:
 
-                CG.init(file_out)
+                CG.init(file_out, fr)
 
                 Parser.file_reader = fr
                 Parser.s_table = SymbolTable()
@@ -314,6 +314,7 @@ class Parser:
             <Epsilon>
         """
         CG.write_prolog()
+        CG.write_epilogue()
         if token.t_type in (TokenType.KeywordFunc,):
             while token.t_type in (TokenType.KeywordFunc,):
                 print(1, end=" ")
@@ -321,7 +322,6 @@ class Parser:
         else:
             print(2, end=" ")
 
-        CG.write_epilogue()
 
 
 
@@ -355,8 +355,8 @@ class Parser:
             Parser.match(token, TokenType.Identifier)
             Parser.match(token, TokenType.OpenParen)
 
-            param_exp_rec_list = Parser.param_list(token)
-            param_types = [x.data_type for x in param_exp_rec_list]
+            param_list = Parser.param_list(token)
+            param_types = [x[1] for x in param_list]
             func_signature.param_list_types = param_types
 
             Parser.match(token, TokenType.CloseParen)
@@ -365,19 +365,37 @@ class Parser:
             Parser.return_identifier(token)
             return_val_type = Parser.return_datatype(token)
 
-            er_return_val = CG.declare_variable(return_val_type, return_val_id)
+            er_return_val = ExpressionRecord(
+                return_val_type, (4*len(param_list)+4), is_temp=False)
             Parser.s_table.insert(return_val_id, er_return_val)
 
             func_signature.return_type = return_val_type
             label = CG.gen_function_label(function_id)
             func_signature.label = label
-            # TODO: fit param list into function_dict
+
+        # In new function, return var is at (4*len(params)+8)($fp),
+        # params are at 4($fp) thru (4*len(params)+4)($fp)
+
 
             CG.code_gen_label(label, str(func_signature))
 
-            func_signature = FunctionSignature(
-                identifier=function_id, label=label,
-                param_list_types=param_types, return_type=return_val_type)
+            offset = (4*len(param_list))
+
+            for param in param_list:
+                identifier = param[0]
+                data_type = param[1]
+                size = param[2]
+
+                er_param = ExpressionRecord(data_type, offset,
+                                            is_temp=False)
+                Parser.s_table.insert(identifier, er_param)
+
+                offset -= 4
+
+
+            # func_signature = FunctionSignature(
+            #     identifier=function_id, label=label,
+            #     param_list_types=param_types, return_type=return_val_type)
 
             Parser.match(token, TokenType.OpenCurly)
             Parser.statement_list(token)
@@ -387,7 +405,9 @@ class Parser:
             Parser.s_table.close_scope()
 
             # reset the stack offsets
-            CG.next_offset = 0
+            CG.next_offset = -8
+
+            CG.code_gen("jr", "$ra")
         else:
             Parser.raise_production_not_found_error(token, 'function_decl')
 
@@ -401,8 +421,7 @@ class Parser:
                 4 TokenType.Identifier <datatype>
                     {TokenType.Comma TokenType.Identifier <datatype>} |
                 5 <Epsilon>
-        Also inserts an identifier into the symbol table
-        :return:    a list of ExpressionRecords that reference the param list
+        :return:    a list of (name, type) tuples that define the param list
         """
         params = []
         if token.t_type == TokenType.Identifier:
@@ -426,19 +445,19 @@ class Parser:
                 # get the param's identifier and datatype
                 identifier = token.lexeme
                 Parser.match(token, TokenType.Identifier)
-                datatype = Parser.datatype(token)
+                datatype, size = Parser.datatype(token)
 
-                # check that the identifier hasn't already been declared
-                Parser.error_on_variable_usage(identifier, is_decl_stmt=True)
+                # # check that the identifier hasn't already been declared
+                # Parser.error_on_variable_usage(identifier, is_decl_stmt=True)
 
-                # reserve space on the stack for the variable
-                var_er = CG.declare_variable(datatype, identifier)
+                # # reserve space on the stack for the variable
+                # var_er = CG.declare_variable(datatype, identifier)
 
                 # add the parameter to the param_list
-                params.append(var_er)
+                params.append((identifier, datatype, size))
 
-                # insert the identifier into the symbol table
-                Parser.s_table.insert(identifier, var_er)
+                # # insert the identifier into the symbol table
+                # Parser.s_table.insert(identifier, var_er)
 
         else:
             print(5, end=" ")
@@ -456,26 +475,27 @@ class Parser:
             TokenType.KeywordChar |
             TokenType.OpenBracket TokenType.Integer TokenType.CloseBracket
             <array_of_datatype>
-        :return:    The datatype, as a Token.Datatypes enum
+        :return:    Token.DataTypes, size
         """
         if token.t_type == TokenType.KeywordInt:
             print(8, end=" ")
             Parser.match(token, TokenType.KeywordInt)
-            return DataTypes.INT
+            return DataTypes.INT, 1
         elif token.t_type == TokenType.KeywordFloat:
             print(9, end=" ")
             Parser.match(token, TokenType.KeywordFloat)
-            return DataTypes.FLOAT
+            return DataTypes.FLOAT, 1
         elif token.t_type == TokenType.KeywordChar:
             print(10, end=" ")
             Parser.match(token, TokenType.KeywordChar)
-            return DataTypes.CHAR
+            return DataTypes.CHAR, 1
         elif token.t_type == TokenType.OpenBracket:
             print(11, end=" ")
             Parser.match(token, TokenType.OpenBracket)
+            size_str = token.lexeme
             Parser.match(token, TokenType.Integer)
             Parser.match(token, TokenType.CloseBracket)
-            return Parser.array_of_datatype(token)
+            return Parser.array_of_datatype(token), int(size_str)
         else:
             Parser.raise_production_not_found_error(token, 'datatype')
 
@@ -534,7 +554,12 @@ class Parser:
         if token.t_type in (TokenType.KeywordInt, TokenType.KeywordFloat,
                       TokenType.KeywordChar, TokenType.OpenBracket):
             print(16, end=" ")
-            return Parser.datatype(token)
+            data_type, size = Parser.datatype(token)
+            if size == 1:
+                return data_type
+            else:
+                raise SemanticError("Function cannot return an array",
+                                    Parser.file_reader)
         else:
             Parser.raise_production_not_found_error(token, 'return_datatype')
 
@@ -573,6 +598,9 @@ class Parser:
             22 <declaration_statement> |
             23 <assignment_or_function_call>
         """
+        # Print the statement as a comment
+        CG.code_gen_comment(Parser.file_reader.current_line.strip())
+
         if token.t_type == TokenType.KeywordReturn:
             print(19, end=" ")
             Parser.return_statement(token)
@@ -721,13 +749,13 @@ class Parser:
             # get the param's identifier and datatype
             identifier = token.lexeme
             Parser.match(token, TokenType.Identifier)
-            datatype = Parser.datatype(token)
+            datatype, size = Parser.datatype(token)
 
             # check that the identifier hasn't already been declared
             Parser.error_on_variable_usage(identifier, True)
 
             # reserve space on the stack for the variable
-            var_er = CG.declare_variable(datatype, identifier)
+            var_er = CG.declare_variable(datatype, identifier, size)
 
             # insert the identifier into the symbol table
             Parser.s_table.insert(identifier, var_er)
@@ -800,7 +828,6 @@ class Parser:
 
             if token.t_type == TokenType.AssignmentOperator:
                 print(24, end=" ")
-                CG.code_gen_comment(Parser.file_reader.current_line.strip())
                 Parser.match(token, TokenType.AssignmentOperator)
                 er_rhs = Parser.expression(token)
                 Parser.match(token, TokenType.Semicolon)
@@ -811,12 +838,12 @@ class Parser:
                 er_subscript = Parser.expression(token)
                 Parser.match(token, TokenType.CloseBracket)
 
-                er_lhs = CG.array_subscript_to_stack_entry(er_lhs, er_subscript)
 
                 Parser.match(token, TokenType.AssignmentOperator)
                 er_rhs = Parser.expression(token)
                 Parser.match(token, TokenType.Semicolon)
-                CG.code_gen_assign(er_lhs, er_rhs)
+                CG.assign_to_array_entry(er_lhs, er_subscript, er_rhs)
+
             elif token.t_type == TokenType.OpenParen:
                 print(26, end=" ")
                 Parser.match(token, TokenType.OpenParen)
@@ -890,7 +917,7 @@ class Parser:
         Implements recursive descent for the rule:
         <factor> ==>
             TokenType.OpenParen <expression> TokenType.CloseParen |
-            TokenType.Identifier <variable_or_function_call> |
+            <variable_or_function_call> |
             TokenType.Float |
             TokenType.Integer |
             TokenType.String
@@ -907,13 +934,15 @@ class Parser:
             # Check to be sure that it has been declared in an open scope
             Parser.error_on_variable_usage(token.lexeme)
 
-            exp_rec = Parser.s_table.find_in_all_scopes(token.lexeme)
+            return Parser.variable_or_function_call(token)
 
-            Parser.match(token, TokenType.Identifier)
-
-            # TODO: connect function return value/array subscript to exp_rec
-            Parser.variable_or_function_call(token)
-            return exp_rec
+            # exp_rec = Parser.s_table.find_in_all_scopes(token.lexeme)
+            #
+            # Parser.match(token, TokenType.Identifier)
+            #
+            # # TODO: connect function return value/array subscript to exp_rec
+            #
+            # return exp_rec
 
         elif token.t_type in (TokenType.Float, TokenType.Integer,
                               TokenType.Char, TokenType.String):
@@ -959,22 +988,75 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <variable_or_function_call> ==>
-            TokenType.OpenBracket <expression> TokenType.CloseBracket |
-            TokenType.OpenParen <expression_list> TokenType.CloseParen |
-            <Epsilon>
+            49 TokenType.Identifier TokenType.OpenBracket <expression>
+                TokenType.CloseBracket |
+            50 TokenType.OpenParen <expression_list> TokenType.CloseParen |
+            51 TokenType.Identifier
         """
-        if token.t_type == TokenType.OpenBracket:
-            print(49, end=" ")
-            Parser.match(token, TokenType.OpenBracket)
-            Parser.expression(token)
-            Parser.match(token, TokenType.CloseBracket)
-        elif token.t_type == TokenType.OpenParen:
-            print(50, end=" ")
-            Parser.match(token, TokenType.OpenParen)
-            Parser.expression_list(token)
-            Parser.match(token, TokenType.CloseParen)
+        if token.t_type == TokenType.Identifier:
+            identifier = token.lexeme
+            exp_rec = Parser.s_table.find_in_all_scopes(identifier)
+
+            Parser.match(token, TokenType.Identifier)
+
+            if token.t_type == TokenType.OpenBracket:
+                print(49, end=" ")
+                Parser.match(token, TokenType.OpenBracket)
+                er_subscript = Parser.expression(token)
+
+                # Input validation: verify that the subscript is an integer,
+                # and that exp_rec contains an array
+                if er_subscript.data_type != DataTypes.INT:
+                    raise SemanticError("Subscript is not an integer",
+                                        Parser.file_reader)
+                if not DataTypes.is_array(exp_rec.data_type):
+                    raise SemanticError("Subscript applied to variable %s, "
+                                        "which is not an array" % identifier,
+                                        Parser.file_reader)
+
+                # Match ]: wait until after potential error messages to do this
+                Parser.match(token, TokenType.CloseBracket)
+
+                # er.loc is valueof(er_subscript) + er.loc
+                # TODO: Fix the location calculation: should be done in code
+                return CG.array_entry_to_temp_val(exp_rec, er_subscript)
+
+            elif token.t_type == TokenType.OpenParen:
+                print(50, end=" ")
+                Parser.match(token, TokenType.OpenParen)
+                er_params = Parser.expression_list(token)
+
+                # Handle built-in functions here:
+                if identifier in CG.BUILT_IN_FUNCTIONS.keys():
+                    Parser.match(token, TokenType.CloseParen)
+                    return CG.BUILT_IN_FUNCTIONS[identifier]()
+
+
+                # Input validation: verify that er_list types match the
+                # function signature, and verify that the identifier is for a
+                # function
+                func_signature = exp_rec
+                if not isinstance(func_signature, FunctionSignature):
+                    raise SemanticError("Tried to call %s(), but it wasn't a "
+                                        "function" % identifier,
+                                        Parser.file_reader.get_line_data())
+                for i in range(len(func_signature.param_list_types)):
+                    expect_type = func_signature.param_list_types[i]
+                    if expect_type != er_params[i].data_type:
+                        raise SemanticError("Parameter for %s in position %d "
+                                            "has the wrong type: expected %s" %
+                                            (identifier, i, expect_type),
+                                            Parser.file_reader)
+
+                Parser.match(token, TokenType.CloseParen)
+
+                return CG.call_function(func_signature, er_params)
+            else:
+                print(51, end=" ")
+                return exp_rec
         else:
-            print(51, end=" ")
+            raise Parser.raise_production_not_found_error(
+                token, "variable_or_function_call")
 
 
 
