@@ -685,6 +685,7 @@ class Parser:
             print(30, end="")
             Parser.match(token, TokenType.KeywordReturn)
             Parser.match(token, TokenType.Semicolon)
+            CG.code_gen("jr", "$ra")
 
 
 
@@ -1122,7 +1123,8 @@ if __name__ == "__main__":
         # Prepend the path of the test file directory
         input_filename = test_file_dir + f
 
-        output_filename = output_file_dir + f + ".asm"
+        # Output filename: replace file extension with asm and put in output dir
+        output_filename = output_file_dir + '.'.join(f.split('.')[:-1]) + ".asm"
 
         print("\nParsing file " + f)
 

@@ -606,7 +606,7 @@ class CG:
         CG.code_gen("add", "$t0", "$t0", "$fp",
                     comment="calculate address of source")
         CG.code_gen("lw", "$t0", "($t0)", comment="Dereference t0")
-        CG.code_gen("sw", "$t0", "%d($fp)" % CG.next_offset,
+        CG.code_gen("sw", "$t0", "%d($fp)" % exp_rec.loc,
                     comment="store value on stack")
         return exp_rec
 
@@ -732,7 +732,7 @@ class CG:
         # store control link and return address
         # CG.code_gen("addi", "$sp", "$sp", -4)
         CG.code_gen("sw", "$fp", "($sp)", comment="store old control link")
-        
+
         CG.code_gen("move", "$fp", "$sp", comment="make new control link")
         CG.code_gen("addi", "$sp", "$sp", -4)
         CG.code_gen("sw", "$ra", "($sp)", comment="store return address")
