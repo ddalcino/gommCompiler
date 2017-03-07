@@ -163,7 +163,7 @@ class Parser:
         which begins recursive descent until an EndOfFile token is reached.
         If no errors occur, it prints "Success!!!"
         :param filename:    The name of the file to parse.
-        :return:            None
+        :return:            True if compiled successfully; else False
         """
         with FileReader(filename) as fr:
 
@@ -177,11 +177,21 @@ class Parser:
                 Parser.program(current_token)
                 Parser.match(current_token, TokenType.EndOfFile)
 
+                # Search for main in open symbol table:
+                # if not found, compilation has failed
+                if not Parser.s_table.find("main"):
+                    print("No main function found in program; point of entry "
+                          "required")
+                    CG.is_code_ok = False
+
+
         if CG.is_code_ok:
             print("\nSuccess!!!")
+            return True
         else:
             print("Compilation completed unsuccessfully.")
             os.remove(asm_output_filename)
+            return False
         
     
     
@@ -381,13 +391,9 @@ class Parser:
 
             offset = (4*len(param_list))
 
-            for param in param_list:
-                identifier = param[0]
-                data_type = param[1]
-                size = param[2]
+            for identifier, data_type, size in param_list:
 
-                er_param = ExpressionRecord(data_type, offset,
-                                            is_temp=False)
+                er_param = ExpressionRecord(data_type, offset, is_temp=False)
                 Parser.s_table.insert(identifier, er_param)
 
                 offset -= 4
@@ -421,7 +427,7 @@ class Parser:
                 4 TokenType.Identifier <datatype>
                     {TokenType.Comma TokenType.Identifier <datatype>} |
                 5 <Epsilon>
-        :return:    a list of (name, type) tuples that define the param list
+        :return:    a list of (name, type, size) tuples that define the params
         """
         params = []
         if token.t_type == TokenType.Identifier:
@@ -581,7 +587,17 @@ class Parser:
                             TokenType.Identifier):
                 print("")
                 print(17, end=" ")
-                Parser.basic_statement(token)
+
+                # Parse <basic_statement>, but recover if any errors occur,
+                # and advance past the next semicolon
+                try:
+                    Parser.basic_statement(token)
+                except ParseError:
+                    CG.is_code_ok = False
+                    print(traceback.format_exc())
+                    Parser.skip_tokens_if_not(TokenType.Semicolon, token)
+                    Parser.match(token, TokenType.Semicolon)
+
         else:
             print(18, end=" ")
 
@@ -659,16 +675,25 @@ class Parser:
             Parser.match(token, TokenType.OpenCurly)
 
             Parser.s_table.open_scope()
+
+            next_offset_before_block = CG.next_offset
+
+            Parser.statement_list(token)
+
             # Parse statement list, with error recovery on }
-            try:
-                Parser.statement_list(token)
-            except ParseError as ex:
-                # print("\nException occurred while parsing code block:\n%s" % ex)
-                print(traceback.format_exc())
-                Parser.skip_tokens_if_not(TokenType.CloseCurly, token)
+            # try:
+            #     Parser.statement_list(token)
+            # except ParseError:
+            #     print(traceback.format_exc())
+            #     Parser.skip_tokens_if_not(TokenType.CloseCurly, token)
 
             Parser.match(token, TokenType.CloseCurly)
             Parser.s_table.close_scope()
+
+            # Reclaim stack space allocated within block, since it has gone
+            # out of scope
+            CG.next_offset = next_offset_before_block
+
         else:
             Parser.raise_production_not_found_error(token, 'code_block')
 
@@ -820,6 +845,8 @@ class Parser:
                 TokenType.CloseParen TokenType.Semicolon
         """
         if token.t_type == TokenType.Identifier:
+            next_offset_before_statement = CG.next_offset
+
             # get the param's identifier and look it up
             identifier = token.lexeme
             Parser.error_on_variable_usage(identifier)
@@ -856,13 +883,15 @@ class Parser:
                 if identifier in CG.BUILT_IN_FUNCTIONS.keys():
                     CG.BUILT_IN_FUNCTIONS[identifier](er_list)
 
+                else:
+                    Parser.call_function(identifier, er_lhs, er_list)
 
-                # TODO: implement function calls
-                # er_rhs = call function with params
-                #CG.code_gen_assign(er_lhs, er_rhs)
             else:
                 Parser.raise_production_not_found_error(
                     token, 'assignment_or_function_call')
+
+            # Reclaim stack space that was used during this statement
+            CG.next_offset = next_offset_before_statement
         else:
             Parser.raise_production_not_found_error(
                 token, 'assignment_or_function_call')
@@ -878,13 +907,15 @@ class Parser:
                             TokenType.Float, TokenType.Integer, TokenType.String):
             print(35, end=" ")
 
-            erL = Parser.term(token)
+            er_lhs = Parser.term(token)
             while token.t_type == TokenType.AddSubOperator:
                 operator = token.lexeme
                 Parser.match(token, TokenType.AddSubOperator)
-                erR = Parser.term(token)
-                erL = CG.gen_expression(erL, erR, operator)
-            return erL
+                er_rhs = Parser.term(token)
+                er_lhs = CG.gen_expression(er_lhs, er_rhs, operator)
+
+
+            return er_lhs
         else:
             Parser.raise_production_not_found_error(token, 'expression')
 
@@ -900,13 +931,15 @@ class Parser:
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer, TokenType.String):
             print(39, end=" ")
-            erL = Parser.factor(token)
+            er_lhs = Parser.factor(token)
             while token.t_type == TokenType.MulDivModOperator:
                 operator = token.lexeme
                 Parser.match(token, TokenType.MulDivModOperator)
-                erR = Parser.factor(token)
-                erL = CG.gen_expression(erL, erR, operator)
-            return erL
+                er_rhs = Parser.factor(token)
+                er_lhs = CG.gen_expression(er_lhs, er_rhs, operator)
+
+
+            return er_lhs
         else:
             Parser.raise_production_not_found_error(token, 'term')
 
@@ -936,14 +969,6 @@ class Parser:
             Parser.error_on_variable_usage(token.lexeme)
 
             return Parser.variable_or_function_call(token)
-
-            # exp_rec = Parser.s_table.find_in_all_scopes(token.lexeme)
-            #
-            # Parser.match(token, TokenType.Identifier)
-            #
-            # # TODO: connect function return value/array subscript to exp_rec
-            #
-            # return exp_rec
 
         elif token.t_type in (TokenType.Float, TokenType.Integer,
                               TokenType.Char, TokenType.String):
@@ -1018,46 +1043,73 @@ class Parser:
                 # Match ]: wait until after potential error messages to do this
                 Parser.match(token, TokenType.CloseBracket)
 
-                # er.loc is valueof(er_subscript) + er.loc
-                # TODO: Fix the location calculation: should be done in code
                 return CG.array_entry_to_temp_val(exp_rec, er_subscript)
 
             elif token.t_type == TokenType.OpenParen:
                 print(50, end=" ")
                 Parser.match(token, TokenType.OpenParen)
                 er_params = Parser.expression_list(token)
-
-                # Handle built-in functions here:
-                if identifier in CG.BUILT_IN_FUNCTIONS.keys():
-                    Parser.match(token, TokenType.CloseParen)
-                    return CG.BUILT_IN_FUNCTIONS[identifier]()
-
-
-                # Input validation: verify that er_list types match the
-                # function signature, and verify that the identifier is for a
-                # function
-                func_signature = exp_rec
-                if not isinstance(func_signature, FunctionSignature):
-                    raise SemanticError("Tried to call %s(), but it wasn't a "
-                                        "function" % identifier,
-                                        Parser.file_reader.get_line_data())
-                for i in range(len(func_signature.param_list_types)):
-                    expect_type = func_signature.param_list_types[i]
-                    if expect_type != er_params[i].data_type:
-                        raise SemanticError("Parameter for %s in position %d "
-                                            "has the wrong type: expected %s" %
-                                            (identifier, i, expect_type),
-                                            Parser.file_reader)
-
                 Parser.match(token, TokenType.CloseParen)
 
-                return CG.call_function(func_signature, er_params)
+                return Parser.call_function(identifier, exp_rec, er_params)
+
+                # # Handle built-in functions here:
+                # if identifier in CG.BUILT_IN_FUNCTIONS.keys():
+                #     Parser.match(token, TokenType.CloseParen)
+                #     return CG.BUILT_IN_FUNCTIONS[identifier]()
+                #
+                #
+                # # Input validation: verify that er_list types match the
+                # # function signature, and verify that the identifier is for a
+                # # function
+                # func_signature = exp_rec
+                # if not isinstance(func_signature, FunctionSignature):
+                #     raise SemanticError("Tried to call %s(), but it wasn't a "
+                #                         "function" % identifier,
+                #                         Parser.file_reader.get_line_data())
+                # for i in range(len(func_signature.param_list_types)):
+                #     expect_type = func_signature.param_list_types[i]
+                #     if expect_type != er_params[i].data_type:
+                #         raise SemanticError("Parameter for %s in position %d "
+                #                             "has the wrong type: expected %s" %
+                #                             (identifier, i, expect_type),
+                #                             Parser.file_reader)
+                #
+                # Parser.match(token, TokenType.CloseParen)
+                #
+                # return CG.call_function(func_signature, er_params)
             else:
                 print(51, end=" ")
                 return exp_rec
         else:
             raise Parser.raise_production_not_found_error(
                 token, "variable_or_function_call")
+
+
+
+    @staticmethod
+    def call_function(func_identifier, func_signature, er_params):
+        # Handle built-in functions here:
+        if func_identifier in CG.BUILT_IN_FUNCTIONS.keys():
+            return CG.BUILT_IN_FUNCTIONS[func_identifier]()
+
+
+        # Input validation: verify that er_list types match the
+        # function signature, and verify that the identifier is for a
+        # function
+        if not isinstance(func_signature, FunctionSignature):
+            raise SemanticError("Tried to call %s(), but it wasn't a "
+                                "function" % func_identifier,
+                                Parser.file_reader.get_line_data())
+        for i in range(len(func_signature.param_list_types)):
+            expect_type = func_signature.param_list_types[i]
+            if expect_type != er_params[i].data_type:
+                raise SemanticError("Parameter for %s in position %d "
+                                    "has the wrong type: expected %s" %
+                                    (func_identifier, i, expect_type),
+                                    Parser.file_reader)
+
+        return CG.call_function(func_signature, er_params)
 
 
 
@@ -1117,21 +1169,36 @@ output_file_dir = "/home/dave/PycharmProjects/Compiler/asmOutput/"
 
 
 if __name__ == "__main__":
+    list_of_failed_compilations = []
     # For every file in the test file directory,
     for f in os.listdir(test_file_dir):
+        success = False
 
         # Prepend the path of the test file directory
         input_filename = test_file_dir + f
 
-        # Output filename: replace file extension with asm and put in output dir
-        output_filename = output_file_dir + '.'.join(f.split('.')[:-1]) + ".asm"
+        # Output filename: add extension .asm and put in output dir
+        asm_out = output_file_dir + f + ".asm"
+        # If there was an extension, replace it instead
+        if '.' in f:
+            asm_out = output_file_dir + '.'.join(f.split('.')[:-1]) + ".asm"
 
         print("\nParsing file " + f)
 
         try:
-            Parser.parse(input_filename, output_filename)
+            success = Parser.parse(input_filename, asm_out)
         except Exception as ex:
             print('\n' + traceback.format_exc())
             # print("\nException occurred while parsing file %s:\n%s" % (f, ex))
 
         Parser.display_symbol_table()
+
+        if not success:
+            list_of_failed_compilations.append(f)
+    if len(list_of_failed_compilations) > 0:
+        print("The following files failed to compile:")
+        for f in list_of_failed_compilations:
+            print(f)
+    else:
+        print("All files compiled successfully!")
+

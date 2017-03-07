@@ -95,7 +95,7 @@ class CG:
             DataTypes.FLOAT: "div.s",
         },
         "%": {
-            DataTypes.INT: "rem",
+            DataTypes.INT: "div",
         },
     }
 
@@ -319,6 +319,9 @@ class CG:
         if er_lhs.is_temp:
             # Reuse the same stack entry
             er_result = er_lhs
+        elif er_rhs.is_temp:
+            # Reuse the rhs entry instead
+            er_result = er_rhs
         else:
             # Make a new stack entry
             er_result = CG.create_temp(er_lhs.data_type)
@@ -330,6 +333,12 @@ class CG:
             CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
             CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
             CG.code_gen(instruction, "$t0", "$t0", "$t1")
+
+            # Mod needs an extra instruction: move result from HI register to t0
+            if operator == "%":
+                CG.code_gen("mfhi", "$t0", comment="Modulus: remainder is in "
+                                                   "HI register")
+
             CG.code_gen("sw", "$t0", "%d($fp)" % er_result.loc)
             return er_result
 
@@ -356,8 +365,6 @@ class CG:
         :param comment: Any comment to be added on this line of code
         :return:        None
         """
-        # TODO: insert line_of_code into the code file instead of print
-
         f_comment = ""          # Formatted comment
         if comment is not None:
             f_comment = "# " + comment
@@ -406,7 +413,7 @@ class CG:
     @staticmethod
     def gen_labelled_data(label, data_type, value):
         """
-        Prints a comment on its own line of code.
+        Prints data with a label, between lines of code
         """
         CG.output("")
         CG.output("\t.data")
@@ -429,9 +436,9 @@ class CG:
         var = ExpressionRecord(data_type=data_type, loc=CG.next_offset,
                                is_temp=False)
         CG.next_offset -= 4*size
-        CG.code_gen("addi", "$sp", "$sp", -4*size,
-                    comment="Reserved %d words on stack for var %s at %d($fp)" %
-                            (size, identifier, var.loc))
+        # CG.code_gen("addi", "$sp", "$sp", -4*size,
+        CG.code_gen_comment(comment="Reserve %d words on stack for var %s at"
+                                    " %d($fp)" % (size, identifier, var.loc))
         return var
 
 
@@ -444,9 +451,9 @@ class CG:
         var = ExpressionRecord(data_type=source_exp_rec.data_type,
                                loc=CG.next_offset, is_temp=False)
         CG.next_offset -= 4
-        CG.code_gen("addi", "$sp", "$sp", -4,
-                    comment="Reserve a word on stack for param at %d($fp)" %
-                            var.loc)
+        # CG.code_gen("addi", "$sp", "$sp", -4,
+        CG.code_gen_comment(comment="Reserve a word on stack for param at "
+                                    "%d($fp)" % var.loc)
         CG.code_gen_assign(var, source_exp_rec)
 
 
@@ -462,9 +469,9 @@ class CG:
         temp_var = ExpressionRecord(data_type=data_type, loc=CG.next_offset,
                                     is_temp=True)
         CG.next_offset -= 4
-        CG.code_gen("addi", "$sp", "$sp", -4,
-                    comment="Reserved one word on stack for temp var %d($fp)" %
-                            temp_var.loc)
+        # CG.code_gen("addi", "$sp", "$sp", -4,
+        CG.code_gen_comment(comment="Reserved one word on stack for temp var "
+                                    "%d($fp)" % temp_var.loc)
         return temp_var
 
 
@@ -507,6 +514,7 @@ class CG:
             # store pointer to string on the stack
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         return literal
+
 
 
     @staticmethod
@@ -612,13 +620,6 @@ class CG:
 
 
 
-    #################################################################
-    # BUILT_IN FUNCTIONS
-    #     print,
-    #     read_int,
-    #     read_float,
-    #     read_char
-
     @staticmethod
     def gen_print(exp_rec_list):
         """
@@ -636,8 +637,8 @@ class CG:
             CG.code_gen("li", "$v0", 1, comment="Syscall for print_int")
             CG.code_gen("syscall")
         elif exp_rec.data_type == DataTypes.FLOAT:
-            CG.code_gen("lwc1", "$f0", "%d($fp)" % exp_rec.loc,
-                        comment="Move float to f0")
+            CG.code_gen("lwc1", "$f12", "%d($fp)" % exp_rec.loc,
+                        comment="Move float to f12")
             CG.code_gen("li", "$v0", 2, comment="Syscall for print_float")
             CG.code_gen("syscall")
         elif exp_rec.data_type == DataTypes.CHAR:
@@ -653,6 +654,7 @@ class CG:
         else:
             raise SemanticError("Unsupported argument for print()",
                                 CG.source_file_reader.get_line_data())
+
 
 
     @staticmethod

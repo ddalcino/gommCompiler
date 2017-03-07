@@ -1,0 +1,34 @@
+func literal(next_char char, ok int) lit int {
+    lit = 0;
+    while (next_char <= '0' && '9' <= next_char) {
+        lit = next_char - '0' + lit * 10;
+        next_char = read_char();
+    }
+    #if (next_char != '+' || next_char != '-' ||
+    #        next_char != '*' || next_char != '/') {
+    #    ok = 0;
+    #}
+
+}
+
+func factor(next_char char, ok int) fac int {
+    # f -> (exp) | lit
+
+    fac = 0;
+
+}
+
+func term(next_char char, ok int) t int {
+    # t -> f {*/ f}
+
+    t = 0;
+}
+
+func expression(next_char char, ok int) e int {
+    # e -> t { +- t }
+
+    term(next_char, ok int);
+    match(next_char, +-);
+    
+
+}
