@@ -56,7 +56,10 @@ class SymbolTable:
         "print": {},
         "read_int": {},
         "read_float": {},
-        "read_char": {}
+        "read_char": {},
+        "cast_int": {},
+        "cast_float": {},
+        "cast_char": {},
     }
 
 

@@ -51,7 +51,7 @@ func bubble_sort(array [10]int, size int) _ int {
     while (0 < swapped) {                   # while swapped == true
         swapped = 0;                        # false
         j = 1;
-        while (j < size-i) {
+        while (j < (size-i)) {
             if (array[j] < array[j-1]) {    # swap
                 temp = array[j-1];
                 array[j-1] = array[j];
@@ -65,7 +65,7 @@ func bubble_sort(array [10]int, size int) _ int {
     return;
 }
 func sort20() _ int {
-    print("Sort 10 values: Please input 10 integers.\n");
+    print("BubbleSort for 10 values: Please input 10 integers.\n");
     var array [10]int;
     var j int;
     j = 0;

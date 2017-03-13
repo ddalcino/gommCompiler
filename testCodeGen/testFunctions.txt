@@ -1,0 +1,52 @@
+func bar(c int, d int) e int {
+    print("\nIn function bar()");
+    print("\nArg c was ");
+    print(c);
+    print(" and arg d was ");
+    print(d);
+
+    e = c * d;
+    print("\nResult of c*d was ");
+    print(e);
+    print("\n");
+}
+
+func foo(a int, b int) c int {
+    print("\nIn function foo()");
+    print("\nArg a was ");
+    print(a);
+    print(" and arg b was ");
+    print(b);
+    c = a * bar(b, a);
+    print("\nResult of a * bar(a,b) was ");
+    print(c);
+    print("\n");
+
+
+}
+
+func main() _ int {
+    var a int;
+    var b int;
+    a = 3;
+    b = 7;
+    print("\nIn function main()");
+    print("\nVar a was ");
+    print(a);
+    print(" and arg b was ");
+    print(b);
+
+    var c int;
+    c = bar(a,b);
+
+    print("\nResult of bar(a,b) was ");
+    print(c);
+    print("\n");
+
+    c = foo(a,b);
+
+    print("\nResult of foo(a,b) was ");
+    print(c);
+    print("\n");
+
+}

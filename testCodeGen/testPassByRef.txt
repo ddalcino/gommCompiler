@@ -1,0 +1,47 @@
+func foo(n int) _ int {
+
+    print("In foo()\n");
+    n = 5 * n;
+    print("n is now ", n, '\n');
+}
+
+func bar(a [5]int) _ int {
+    var i int;
+    i = 0;
+    print("\nIn bar()\nUninitialized array:\n");
+    while (i < 5){
+        print(a[i], '\n');
+        i = i + 1;
+    }
+    i = 0;
+    print("\nInitialize array: enter 5 ints\n");
+    while (i < 5){
+        a[i] = read_int();
+        i = i + 1;
+    }
+
+}
+
+func main() _ int {
+    var n int;
+    n = 6;
+    print("In main()\n");
+    print("n is now ", n, '\n');
+    foo(n);
+    print("Back in main(). If we have passed by value, n is 5.\n");
+    print("If we have passed by reference, n is 30\n");
+    print("n is now ", n, '\n');
+
+    var a [5]int;
+    bar(a);
+    print("In main()\n");
+
+    var i int;
+    i = 0;
+    while (i < 5){
+        print(a[i], '\n');
+        i = i + 1;
+    }
+
+}
+

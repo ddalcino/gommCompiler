@@ -18,16 +18,22 @@ functionality.
 
 The grammar implemented is summarized here:
 <program> ==>
-    1 <function_decl> {<function_decl>} |
-    2 <Epsilon>
+    1 {<func_decl_or_proto>} |
+<func_decl_or_proto> ==>
+    2 <function_decl> |
+    3 <function_prototype>
+
+<function_prototype> ==>
+    4 TokenType.KeywordProto TokenType.Identifier TokenType.OpenParen
+        <param_list> TokenType.CloseParen <return_identifier> <return_datatype>
+        TokenType.Semicolon
 <function_decl> ==>
-    3 TokenType.KeywordFunc TokenType.Identifier TokenType.OpenParen <param_list>
-        TokenType.CloseParen <return_identifier> <return_datatype>
+    5 TokenType.KeywordFunc TokenType.Identifier TokenType.OpenParen
+        <param_list> TokenType.CloseParen <return_identifier> <return_datatype>
         TokenType.OpenCurly <statement_list> TokenType.CloseCurly
 <param_list> ==>
-    4 TokenType.Identifier <datatype>
-        {TokenType.Comma TokenType.Identifier <datatype>}  |
-    5 <Epsilon>
+    6  [ TokenType.Identifier <datatype>
+        {TokenType.Comma TokenType.Identifier <datatype>} ]
 <datatype> ==>
     8 TokenType.KeywordInt |
     9 TokenType.KeywordFloat |
@@ -52,12 +58,6 @@ The grammar implemented is summarized here:
     22 <declaration_statement> |
     23 <assignment_or_function_call>
 
-    # 19 TokenType.KeywordReturn TokenType.Semicolon |
-    # 20 TokenType.KeywordIf <remaining_if_statement> |
-    # 21 TokenType.KeywordWhile <remaining_while_statement> |
-    # 22 TokenType.KeywordVar TokenType.Identifier <datatype> TokenType.Semicolon |
-    # 23 TokenType.Identifier <assignment_or_function_call> TokenType.Semicolon
-
 <expression_list> ==>
     27 <expression> {, <expression>}
 
@@ -68,14 +68,14 @@ The grammar implemented is summarized here:
     30 TokenType.KeywordReturn TokenType.Semicolon
 
 <if_statement> ==>
-    31 TokenType.KeywordIf TokenType.OpenParen <boolean_expression>
+    31 TokenType.KeywordIf TokenType.OpenParen <expression>
         TokenType.CloseParen <code_block> [ TokenType.KeywordElse <code_block> ]
 
 <declaration_statement> ==>
     33 TokenType.KeywordVar TokenType.Identifier <datatype> TokenType.Semicolon
 
 <while_statement> ==>
-    34 TokenType.KeywordWhile TokenType.OpenParen <boolean_expression>
+    34 TokenType.KeywordWhile TokenType.OpenParen <expression>
         TokenType.CloseParen <code_block>
 
 <assignment_or_function_call> ==>
@@ -90,7 +90,9 @@ The grammar implemented is summarized here:
 <expression> ==>
     35 <term> { TokenType.AddSubOperator <term> }
 <term> ==>
-    39 <factor> { TokenType.MulDivModOperator <factor> }
+    39 <relfactor> { TokenType.MulDivModOperator <relfactor> }
+<relfactor> ==>
+    40 <factor> [TokenType.RelationalOperator <factor>]
 
 <factor> ==>
     44 TokenType.OpenParen <expression> TokenType.CloseParen |
@@ -218,8 +220,8 @@ class Parser:
             raise MatchError(
                 "At line %d, column %d: " % (line_data["Line_Num"],
                                              line_data["Column"]) +
-                "Tried to match %r with %r, but they were unequal.\n" %
-                (current_token, expected_tt) +
+                "Expected %r but found %r, but they were unequal.\n" %
+                (expected_tt, current_token) +
                 "%s" % line_data["Line"] +
                 " " * line_data["Column"] + "^\n"
             )
@@ -259,7 +261,8 @@ class Parser:
 
 
     @staticmethod
-    def error_on_variable_usage(identifier, is_decl_stmt=False):
+    def error_on_variable_usage(identifier, is_decl_stmt=False,
+                                is_prototype=False):
         """
         Verifies that an identifier has been is_decl_stmt before use, and is
         currently in an open scope. If not, raises an error.
@@ -271,6 +274,7 @@ class Parser:
                                 errors when the identifier has already been
                                 declared and is in scope. (use this to prevent
                                 redeclaration of a variable)
+        :param is_prototype:    TODO
         :return:                None
         """
         # if we are using the variable without having declared it earlier,
@@ -285,9 +289,22 @@ class Parser:
                 "%s" % line_data["Line"] +
                 " " * line_data["Column"] + "^\n"
             )
+
+        # previously defined record of identifier
+        prev_record = Parser.s_table.find(identifier)
+
         # if we are declaring the variable that has already been
         # declared in this scope,
-        elif is_decl_stmt and Parser.s_table.find(identifier) is not None:
+        if is_decl_stmt and prev_record is not None:
+
+            # if prev_record is a prototype FunctionSignature, and the new
+            # declaration is not a prototype, then it's the first definition
+            # of the function.
+            # Any other case is an error.
+            if isinstance(prev_record, FunctionSignature) and \
+                    prev_record.is_prototype and not is_prototype:
+                return
+
             # report an error
             line_data = Parser.file_reader.get_line_data()
             raise RedeclaredVariableError(
@@ -320,18 +337,78 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <program> ==>
-            <function_decl> {<function_decl>} |
-            <Epsilon>
+            1 {<func_decl_or_proto>} |
         """
         CG.write_prolog()
         CG.write_epilogue()
-        if token.t_type in (TokenType.KeywordFunc,):
-            while token.t_type in (TokenType.KeywordFunc,):
-                print(1, end=" ")
-                Parser.function_decl(token)
-        else:
-            print(2, end=" ")
 
+        print(1, end=" ")
+        if token.t_type in (TokenType.KeywordFunc, TokenType.KeywordProto):
+            while token.t_type in (TokenType.KeywordFunc,
+                                   TokenType.KeywordProto):
+                Parser.func_decl_or_proto(token)
+
+
+
+    @staticmethod
+    def func_decl_or_proto(token):
+        """
+        Implements recursive descent for the rule:
+        <func_decl_or_proto> ==>
+            2 <function_decl> |
+            3 <function_prototype>
+        """
+        print("")           # Newline, for readability
+        if token.t_type == TokenType.KeywordFunc:
+            print(2, end=" ")
+            Parser.function_decl(token)
+        elif token.t_type == TokenType.KeywordProto:
+            print(3, end=" ")
+            Parser.function_prototype(token)
+        else:
+            Parser.raise_production_not_found_error(token, 'func_decl_or_proto')
+
+
+
+    @staticmethod
+    def function_prototype(token):
+        """
+        Implements recursive descent for the rule:
+        <function_prototype> ==>
+            4   TokenType.KeywordProto TokenType.Identifier TokenType.OpenParen
+                <param_list> TokenType.CloseParen <return_identifier>
+                <return_datatype> TokenType.Semicolon
+        """
+        if token.t_type == TokenType.KeywordProto:
+            print(5, end=" ")
+            Parser.match(token, TokenType.KeywordProto)
+
+            # add the function identifier to the symbol table
+            function_id = token.lexeme
+
+            # check that the identifier hasn't already been declared
+            Parser.error_on_variable_usage(function_id, is_decl_stmt=True,
+                                           is_prototype=True)
+
+            Parser.match(token, TokenType.Identifier)
+            Parser.match(token, TokenType.OpenParen)
+
+            param_list = Parser.param_list(token)
+            param_types = [x[1] for x in param_list]
+
+            Parser.match(token, TokenType.CloseParen)
+
+            Parser.return_identifier(token)
+            return_val_type = Parser.return_datatype(token)
+
+            func_signature = FunctionSignature(
+                identifier=function_id,
+                label=CG.gen_function_label(function_id),
+                param_list_types=param_types,
+                return_type=return_val_type,
+                is_prototype=True)
+            Parser.s_table.insert(function_id, func_signature)
+            Parser.match(token, TokenType.Semicolon)
 
 
 
@@ -340,14 +417,13 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <function_decl> ==>
-            TokenType.KeywordFunc TokenType.Identifier
-            TokenType.OpenParen <param_list> TokenType.CloseParen
-            <return_identifier> <return_datatype>
-            TokenType.OpenCurly <statement_list> TokenType.CloseCurly
+            5   TokenType.KeywordFunc TokenType.Identifier
+                TokenType.OpenParen <param_list> TokenType.CloseParen
+                <return_identifier> <return_datatype>
+                TokenType.OpenCurly <statement_list> TokenType.CloseCurly
         """
         if token.t_type == TokenType.KeywordFunc:
-            print("")
-            print(3, end=" ")
+            print(5, end=" ")
             Parser.match(token, TokenType.KeywordFunc)
 
             # add the function identifier to the symbol table
@@ -357,7 +433,16 @@ class Parser:
             Parser.error_on_variable_usage(function_id, is_decl_stmt=True)
 
             func_signature = FunctionSignature(function_id)
-            Parser.s_table.insert(function_id, func_signature)
+
+            old_signature = Parser.s_table.find_in_all_scopes(function_id)
+            if not old_signature:
+                # we don't need to check that signatures match
+                Parser.s_table.insert(function_id, func_signature)
+            elif not isinstance(old_signature, FunctionSignature):
+                raise SemanticError("Tried to redeclare %s as a function, "
+                                    "but it was already a variable" %
+                                    function_id,
+                                    Parser.file_reader.get_line_data())
 
             # open a new scope
             Parser.s_table.open_scope()
@@ -367,7 +452,19 @@ class Parser:
 
             param_list = Parser.param_list(token)
             param_types = [x[1] for x in param_list]
-            func_signature.param_list_types = param_types
+
+            if not old_signature:
+                func_signature.param_list_types = param_types
+            else:
+                # verify that param types match
+                for i in range(len(param_types)):
+                    if param_types[i] != old_signature.param_list_types[i]:
+                        raise SemanticError(
+                            "In declaration of function %s, parameter #%d is "
+                            "of type %r, but previous forward declaration was "
+                            "of type %r" % (function_id, i, param_types[i],
+                                            old_signature.param_list_types[i]),
+                            Parser.file_reader.get_line_data())
 
             Parser.match(token, TokenType.CloseParen)
 
@@ -379,18 +476,30 @@ class Parser:
                 return_val_type, (4*len(param_list)+4), is_temp=False)
             Parser.s_table.insert(return_val_id, er_return_val)
 
-            func_signature.return_type = return_val_type
-            label = CG.gen_function_label(function_id)
-            func_signature.label = label
+            if not old_signature:
+                func_signature.return_type = return_val_type
+                func_signature.label = CG.gen_function_label(function_id)
+            else:
+                # verify that return types match
+                if return_val_type != old_signature.return_type:
+                    raise SemanticError(
+                        "In declaration of function %s, return datatype is "
+                        "of type %r, but previous forward declaration was "
+                        "of type %r" % (function_id, return_val_type,
+                                        old_signature.return_type),
+                        Parser.file_reader.get_line_data())
 
-        # In new function, return var is at (4*len(params)+8)($fp),
-        # params are at 4($fp) thru (4*len(params)+4)($fp)
+                # at this point, we are guaranteed that the return types,
+                # param types, and identifier are equal to that of the old
+                # signature, so we can use that signature instead
+                func_signature = old_signature
 
-
-            CG.code_gen_label(label, str(func_signature))
+            CG.code_gen_label(func_signature.label, comment=str(func_signature))
 
             offset = (4*len(param_list))
 
+            # In new function, return var is at (4*len(params)+8)($fp),
+            # params are at 4($fp) thru (4*len(params)+4)($fp)
             for identifier, data_type, size in param_list:
 
                 er_param = ExpressionRecord(data_type, offset,
@@ -420,14 +529,14 @@ class Parser:
         """
         Implements recursive descent for the rule:
             <param_list> ==>
-                4 TokenType.Identifier <datatype>
-                    {TokenType.Comma TokenType.Identifier <datatype>} |
-                5 <Epsilon>
+                6  [ TokenType.Identifier <datatype>
+                    {TokenType.Comma TokenType.Identifier <datatype>} ]
         :return:    a list of (name, type, size) tuples that define the params
         """
         params = []
+        print(6, end=" ")
+
         if token.t_type == TokenType.Identifier:
-            print(4, end=" ")
 
             # We will handle each entry in the list the same way, except if
             # it's not the first entry, we will consume comma tokens before
@@ -461,8 +570,6 @@ class Parser:
                 # # insert the identifier into the symbol table
                 # Parser.s_table.insert(identifier, var_er)
 
-        else:
-            print(5, end=" ")
         return params
 
 
@@ -508,9 +615,9 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <array_of_datatype> ==>
-            TokenType.KeywordInt |
-            TokenType.KeywordFloat |
-            TokenType.KeywordChar
+            12 TokenType.KeywordInt |
+            13 TokenType.KeywordFloat |
+            14 TokenType.KeywordChar
         :return:    The datatype, as a SymbolTable.IdType enum
         """
         if token.t_type == TokenType.KeywordInt:
@@ -644,7 +751,7 @@ class Parser:
         return_list = []
         if token.t_type in \
                 (TokenType.OpenParen, TokenType.Identifier, TokenType.Float,
-                 TokenType.Integer, TokenType.String):
+                 TokenType.Integer, TokenType.String, TokenType.Char):
             print(27, end=" ")
             return_list.append(Parser.expression(token))
             while token.t_type == TokenType.Comma:
@@ -715,18 +822,23 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <if_statement> ==>
-            31 TokenType.KeywordIf TokenType.OpenParen <boolean_expression>
+            31 TokenType.KeywordIf TokenType.OpenParen <expression>
                 TokenType.CloseParen <code_block> [ <else_clause> ]
         """
         if token.t_type == TokenType.KeywordIf:
             print(31, end=" ")
             Parser.match(token, TokenType.KeywordIf)
             Parser.match(token, TokenType.OpenParen)
-            er_lhs, op, er_rhs = Parser.boolean_expression(token)
+            er_condition = Parser.expression(token)
+            if er_condition.data_type != DataTypes.BOOL:
+                raise SemanticError("If statement requires boolean expression "
+                                    "as an argument",
+                                    Parser.file_reader.get_line_data())
+            # er_lhs, op, er_rhs = Parser.boolean_expression(token)
             Parser.match(token, TokenType.CloseParen)
 
             else_label = CG.gen_else_label()
-            CG.code_gen_if(er_lhs, op, er_rhs, else_label)
+            CG.code_gen_if(er_condition, else_label)
 
             Parser.code_block(token)
 
@@ -794,23 +906,23 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <while_statement> ==>
-            34 TokenType.KeywordWhile TokenType.OpenParen <boolean_expression>
+            34 TokenType.KeywordWhile TokenType.OpenParen <expression>
                 TokenType.CloseParen <code_block>
         """
         if token.t_type == TokenType.KeywordWhile:
             print(34, end=" ")
-            Parser.match(token, TokenType.KeywordWhile)
-            Parser.match(token, TokenType.OpenParen)
-            er_lhs, operator, er_rhs = Parser.boolean_expression(token)
-            Parser.match(token, TokenType.CloseParen)
-
             before_while_lbl, after_while_lbl = CG.gen_while_labels()
 
             # Write label for beginning of while loop
             CG.code_gen_label(before_while_lbl)
 
+            Parser.match(token, TokenType.KeywordWhile)
+            Parser.match(token, TokenType.OpenParen)
+            er_condition = Parser.expression(token)
+            Parser.match(token, TokenType.CloseParen)
+
             # Perform the test
-            CG.code_gen_if(er_lhs, operator, er_rhs, after_while_lbl)
+            CG.code_gen_if(er_condition, after_while_lbl)
 
             # Write the contents of the loop
             Parser.code_block(token)
@@ -924,23 +1036,47 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <term> ==>
-            39 <factor> { TokenType.MulDivModOperator <factor> }
+            39 <relfactor> { TokenType.MulDivModOperator <relfactor> }
         """
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer,
                             TokenType.String, TokenType.Char):
             print(39, end=" ")
-            er_lhs = Parser.factor(token)
+            er_lhs = Parser.relfactor(token)
             while token.t_type == TokenType.MulDivModOperator:
                 operator = token.lexeme
                 Parser.match(token, TokenType.MulDivModOperator)
-                er_rhs = Parser.factor(token)
+                er_rhs = Parser.relfactor(token)
                 er_lhs = CG.gen_expression(er_lhs, er_rhs, operator)
 
 
             return er_lhs
         else:
             Parser.raise_production_not_found_error(token, 'term')
+
+
+
+    @staticmethod
+    def relfactor(token):
+        """
+        Implements recursivew descent for the rule:
+        <relfactor> ==>
+            40 <factor> [TokenType.RelationalOperator <factor>]
+        """
+        if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
+                            TokenType.Float, TokenType.Integer,
+                            TokenType.String, TokenType.Char):
+            print(40, end=" ")
+            er_lhs = Parser.factor(token)
+            if token.t_type == TokenType.RelationalOperator:
+                operator = token.lexeme
+                Parser.match(token, TokenType.RelationalOperator)
+                er_rhs = Parser.factor(token)
+                return CG.gen_rel_expression(er_lhs, er_rhs, operator)
+            return er_lhs
+        else:
+            Parser.raise_production_not_found_error(token, 'relfactor')
+
 
 
 

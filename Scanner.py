@@ -94,6 +94,8 @@ delta = {
         "=": "Assignment_Accept",
         "!": "Bang",
         "<": "LessThan_Accept",
+        "&": "And_Start",
+        "|": "Or_Start",
 
         # Special characters that can only be a single-character token
         # TODO: decide whether or not to put +- in same state, also */%
@@ -192,9 +194,17 @@ delta = {
     "LessThan_Accept": {
         "=": "LessThanEquals_Accept"
     },
+    "And_Start": {
+        "&": "And_Accept",
+    },
+    "Or_Start": {
+        "|": "Or_Accept",
+    },
     "NotEquals_Accept": {},
     "Equals_Accept": {},
     "LessThanEquals_Accept": {},
+    "And_Accept": {},
+    "Or_Accept": {},
 
     # Special characters that can only be a single-character token and have
     # no valid transitions
@@ -220,10 +230,12 @@ token_type_for_accept_state = {
     "Comment_Accept":       tt.Comment,     # these tokens will be ignored
 
     "Assignment_Accept":    tt.AssignmentOperator,
-    "Equals_Accept":        tt.EqualityOperator,
-    "NotEquals_Accept":     tt.NotEqualOperator,
-    "LessThan_Accept":      tt.LessThanOperator,
-    "LessThanEquals_Accept": tt.LessThanOrEqualOp,
+    "Equals_Accept":        tt.RelationalOperator,
+    "NotEquals_Accept":     tt.RelationalOperator,
+    "LessThan_Accept":      tt.RelationalOperator,
+    "LessThanEquals_Accept": tt.RelationalOperator,
+    "And_Accept":           tt.RelationalOperator,
+    "Or_Accept":            tt.RelationalOperator,
 
     # Special characters that can only be a single-character token
     "Add_Accept":           tt.AddSubOperator,

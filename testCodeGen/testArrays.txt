@@ -1,0 +1,50 @@
+func main() _ int {
+
+    var a [30]int;
+
+    # fit the first 30 Fib numbers into the array
+
+    var MAX int;
+    MAX = 30;
+    var n int;
+    n = 0;
+
+    while (n < MAX) {
+        if (n < 1) {
+            a[n] = 0;
+            print("a["); print(n); print("]="); print(a[n]); print("\n");
+        } else {
+            a[n] = 1;
+            print("a["); print(n); print("]="); print(a[n]); print("\n");
+            var last int;
+            last = 0;
+            var temp int;
+            var i int;
+            i = 1;
+            while (i < n) {
+                temp = last + a[n];
+                last = a[n];
+                a[n] = temp;
+                print("a["); print(n); print("]="); print(a[n]); print("\n");
+                i = i + 1;
+            }
+        }
+
+        n = n+1;
+    }
+
+    print("The first ");
+    print(MAX);
+    print(" numbers in the Fibonacci Sequence are: \n");
+
+    # print the contents of the array
+    n = 0;
+
+    while (n < MAX) {
+        print(a[n]);
+        print(" ");
+        n = n+1;
+    }
+
+    print("\nGoodbye!!!\n");
+}

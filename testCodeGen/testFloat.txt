@@ -1,0 +1,11 @@
+func main() _ int {
+    var f float;
+    f = 0.0;
+    while(0<1){
+        print("\nEnter a float: ");
+        f = read_float();
+        print(f); print(" * "); print(f); print(" is: ");
+        print(f * f);
+    }
+
+}

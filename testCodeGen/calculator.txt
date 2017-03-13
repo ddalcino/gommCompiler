@@ -1,34 +1,188 @@
-func literal(next_char char, ok int) lit int {
-    lit = 0;
-    while (next_char <= '0' && '9' <= next_char) {
-        lit = next_char - '0' + lit * 10;
+func match_add_sub(next_char char) ok int {
+    # If next_char is a + or -, it reads the next char and returns 1.
+    # Otherwise, returns 0.
+    if ((next_char == '+') || (next_char == '-')) {
         next_char = read_char();
+        print(next_char);
+        ok = 1;     # true
+    } else {
+        ok = 0;     # false
     }
-    #if (next_char != '+' || next_char != '-' ||
-    #        next_char != '*' || next_char != '/') {
-    #    ok = 0;
-    #}
-
 }
+
+func match_mul_div(next_char char) ok int {
+    # If next_char is a * or /, it reads the next char and returns 1.
+    # Otherwise, returns 0.
+    if ((next_char == '*') || (next_char == '/')) {
+        next_char = read_char();
+        print(next_char);
+        ok = 1;     # true
+    } else {
+        ok = 0;     # false
+    }
+}
+
+func match_open_p(next_char char) ok int {
+    # If next_char is a (, it reads the next char and returns 1.
+    # Otherwise, returns 0.
+    if (next_char == '(') {
+        next_char = read_char();
+        print(next_char);
+        ok = 1;     # true
+    } else {
+        ok = 0;     # false
+    }
+}
+
+func match_close_p(next_char char) ok int {
+    # If next_char is a ), it reads the next char and returns 1.
+    # Otherwise, returns 0.
+    if (next_char == ')') {
+        next_char = read_char();
+        print(next_char);
+        ok = 1;     # true
+    } else {
+        ok = 0;     # false
+    }
+}
+
+func literal(next_char char, ok int) lit int {
+    # If next_char is a number, it turns the following sequence of numbers
+    # into a single number and returns it. ok is set to 1, meaning that the
+    # number was valid.
+    # If next_char wasn't a number, ok is set to 0.
+    lit = 0;
+    ok = 0;
+    while ( ('0' <= next_char) && (next_char <= '9') ) {
+        ok = 1;
+        lit = cast_int(next_char) - cast_int('0') + lit * 10;
+        next_char = read_char();
+        print(next_char);
+    }
+}
+
+# forward declaration of function prototype
+proto expression(next_char char, ok int) e int;
 
 func factor(next_char char, ok int) fac int {
     # f -> (exp) | lit
 
-    fac = 0;
+    if (next_char == '(') {
+        ok = match_open_p(next_char);
+        if (ok == 0) { return; }
+        fac = expression(next_char, ok);
+        if (ok == 0) { return; }
+        ok = match_close_p(next_char);
+        return;
+    }
+
+    if (('0' <= next_char) && (next_char <= '9')) {
+        fac = literal(next_char, ok);
+        return;
+    }
+
+    ok = 0;
 
 }
 
 func term(next_char char, ok int) t int {
     # t -> f {*/ f}
 
+    var temp int;
+    var matched_mul_div int;
+    var operator char;
     t = 0;
+    matched_mul_div = 0;
+
+    temp = factor(next_char, ok);
+    if (ok == 0) {      # we didn't read a valid factor
+        return;
+    }
+    t = temp;
+    operator = next_char;
+    matched_mul_div = match_mul_div(next_char);
+
+    while (matched_mul_div != 0) {      # we have seen a * or /
+        temp = factor(next_char, ok);
+        if (ok == 0) {      # we didn't read a valid factor
+            return;
+        }
+        if (operator == '*') {
+            t = t * temp;
+        }
+        if (operator == '/') {
+            t = t / temp;
+        }
+
+        operator = next_char;
+        matched_mul_div = match_mul_div(next_char);
+    }
 }
 
 func expression(next_char char, ok int) e int {
     # e -> t { +- t }
 
-    term(next_char, ok int);
-    match(next_char, +-);
-    
+    var temp int;
+    var matched_add_sub int;
+    var operator char;
+    e = 0;
+    matched_add_sub = 0;
+
+    temp = term(next_char, ok);
+    if (ok == 0) {      # we didn't read a valid factor
+        return;
+    }
+    e = temp;
+    operator = next_char;
+    matched_add_sub = match_add_sub(next_char);
+
+    while(matched_add_sub != 0) {       # we have seen a + or -
+        temp = term(next_char, ok);
+        if (ok == 0) {                  # we didn't read a valid term
+            return;
+        }
+        if (operator == '+') {
+            e = e + temp;
+        }
+        if (operator == '-') {
+            e = e - temp;
+        }
+
+        operator = next_char;
+        matched_add_sub = match_add_sub(next_char);
+    }
+}
+
+func main() _ int {
+
+    print("go-- calculator: it barely works!\n");
+    print("At the prompt, enter a mathematical expression, consisting of\n",
+          "positive integers, +, -, *, / and parentheses. When you're done,\n",
+          "press = and the calculator will print the answer. If you use non-\n",
+          "supported characters, or if you don't match up your parentheses,\n",
+          "you will get an error message instead of an answer.\n",
+          "Hint: The calculator doesn't accept negative numbers. Type '0-n'\n",
+          "where n is some positive integer to get a negative number.\n",
+          "Have loads of fun!\n\n");
+
+    var next_char char;
+    var result int;
+    var ok int;
+    result = 0;
+    ok = 1;
+
+    while (0==0) {
+        print('>');
+        next_char = read_char();
+        print(next_char);
+        result = expression(next_char, ok);
+
+        if (next_char == '=') {
+            print('\n', '\t', result, '\n');
+        } else {
+            print("\nSyntax error; try again!\n");
+        }
+    }
 
 }
+

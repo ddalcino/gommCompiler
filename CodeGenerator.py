@@ -1,7 +1,6 @@
 from Token import TokenType, DataTypes
 from Errors import *
 
-disable_pass_by_reference = False
 
 class ExpressionRecord:
 
@@ -42,7 +41,8 @@ class FunctionSignature:
                  #param_list_ids,
                  param_list_types=None,
                  #return_id,
-                 return_type=None):
+                 return_type=None,
+                 is_prototype=False):
         #assert(len(param_list_types) == len(param_list_ids))
         # for type in param_list_types:
         #     assert(isinstance(type, DataTypes))
@@ -54,12 +54,38 @@ class FunctionSignature:
         self.param_list_types = param_list_types
         #self.return_id = return_id
         self.return_type = return_type
+        self.is_prototype = is_prototype
 
     def __str__(self):
         params_str = ', '.join(
             [str(x).split('.')[-1] for x in self.param_list_types])
         return_type_str = str(self.return_type).split('.')[-1]
+
         return self.identifier + "(" + params_str + ") " + return_type_str
+
+
+
+class RegisterDB:
+    """
+    A register database, for use in peephole optimization
+    """
+    def __init__(self):
+        # self.data holds a list of key-value pairs, where the key is the
+        # name of a register, and the value is the offset into the stack from
+        # $fp that the register has been most recently copied into.
+        self.data = {
+            "$t0": 0,    "$t1": 0,    "$t2": 0,    "$t3": 0,    "$t4": 0,
+            "$t5": 0,    "$t6": 0,    "$t7": 0,    "$t8": 0,    "$t9": 0,
+            "$s0": 0,    "$s1": 0,    "$s2": 0,    "$s3": 0,
+            "$s4": 0,    "$s5": 0,    "$s6": 0,    "$s7": 0,
+            "$f0": 0,    "$f1": 0,    "$f2": 0,    "$f3": 0,    "$f4": 0,
+            "$f5": 0,    "$f6": 0,    "$f7": 0,    "$f8": 0,    "$f9": 0,
+            "$f10": 0,   "$f11": 0,   "$f12": 0,   "$f13": 0,   "$f14": 0,
+            "$f15": 0,   "$f16": 0,   "$f17": 0,   "$f18": 0,   "$f19": 0,
+            "$f20": 0,   "$f21": 0,   "$f22": 0,   "$f23": 0,   "$f24": 0,
+            "$f25": 0,   "$f26": 0,   "$f27": 0,   "$f28": 0,   "$f29": 0,
+            "$f30": 0,   "$f31": 0,
+        }
 
 
 class CG:
@@ -77,10 +103,13 @@ class CG:
 
     code_file = None        # A file to which the Code Generator will write
     is_code_ok = True       # Always True, unless errors have been encountered
-    next_offset = -8         # The offset of the next available position on
+    next_offset = -8        # The offset of the next available position on
                             # the stack
     num_labels_made = None
     source_file_reader = None
+    last_instruction = None     # A record of the last instruction generated,
+                                # for use in peephole optimization. Only
+                                # accessed or written to by CG.code_gen().
 
     #################################################################
     # STATIC CONSTANT DATA:
@@ -234,8 +263,6 @@ class CG:
         :param line_of_code:    A line of code to write
         """
         CG.code_file.write(line_of_code + CG.LINE_ENDING)
-        # print(line_of_code)
-
 
 
 
@@ -257,46 +284,6 @@ class CG:
         """
         CG.output(CG.EPILOGUE)
 
-
-    @staticmethod
-    def write_function(identifier, param_list):
-        """
-
-        :return:
-        """
-
-        # In new function, return var is at 4($fp),
-        # params are at 8($fp) thru (4*len(params)+8)($fp)
-
-        # Use param_list to decide how large to make the stack:
-        # Assume that each parameter is 4 bytes
-        # Add an extra 8 bytes for the return address and frame pointer
-        stack_entry_size = 4 * (len(param_list) + 2)
-
-        # # The index of the function
-        # index = len(self.functions)
-        #
-        # # The name of the function
-        # function_name = "function_%d" % index
-        # self.functions[identifier]={
-        #     "asm_name": function_name,
-        #     "param_list": param_list
-        # }
-        #
-        # # Write the function label and open the stack frame
-        # function_prologue = \
-        #     '%s:\n' % function_name + \
-        #     '\taddiu\t$sp, $sp, -%d\n' % stack_entry_size + \
-        #     '\tsw\t$ra, %d($fp)\n' % (stack_entry_size-4) +\
-        #     '\tsw\t$fp, %d($fp)\n' % (stack_entry_size-8) +\
-        #     '\taddiu\t$fp, $sp, %d\n' % stack_entry_size
-        #
-        # # Restore return address, frame pointer, stack pointer, and return
-        # function_epilogue = \
-        #     '\tlw\t$ra, %d($fp)\n' % (stack_entry_size-4) +\
-        #     '\tlw\t$fp, %d($fp)\n' % (stack_entry_size-8) +\
-        #     '\taddiu\t$sp, $sp, %d\n' % stack_entry_size +\
-        #     '\tjr\t$ra\n'
 
 
     @staticmethod
@@ -370,7 +357,137 @@ class CG:
 
 
     @staticmethod
-    def code_gen(instruction, rd=None, rt=None, rs=None, comment=None):
+    def gen_rel_expression(er_lhs, er_rhs, operator):
+        assert  isinstance(er_lhs, ExpressionRecord) and \
+                isinstance(er_rhs, ExpressionRecord)
+        if er_lhs.data_type != er_rhs.data_type:
+            raise SemanticError("Types must match to use relational operator",
+                                CG.source_file_reader.get_line_data())
+
+        # Can we overwrite er_lhs?
+        if er_lhs.is_temp:
+            # Reuse the same stack entry
+            er_result = er_lhs
+        elif er_rhs.is_temp:
+            # Reuse the rhs entry instead
+            er_result = er_rhs
+        else:
+            # Make a new stack entry
+            er_result = CG.create_temp(er_lhs.data_type)
+
+        if er_lhs.data_type == DataTypes.BOOL:
+            # put lhs in t0 and rhs in t1
+            CG.load_reg(reg_dest="$t0", er_src=er_lhs, reg_temp="$t2")
+            CG.load_reg(reg_dest="$t1", er_src=er_rhs, reg_temp="$t2")
+
+            if operator == "&&":
+                CG.code_gen("beq", "$t0", "$0", "1f")
+                CG.code_gen("beq", "$t1", "$0", "1f")
+                CG.code_gen("li", "$t0", 1, comment="Test was true")
+                CG.code_gen("b", "2f")
+                CG.code_gen_label("1", comment="Failed test")
+                CG.code_gen("li", "$t0", 0, comment="Test was false")
+                CG.code_gen_label("2")
+                CG.store_reg(er_result, "$t0", "$t1", "$t2")
+            elif operator == "||":
+                CG.code_gen("bne", "$t0", "$0", "1f")
+                CG.code_gen("bne", "$t1", "$0", "1f")
+                CG.code_gen("li", "$t0", 0, comment="Test was false")
+                CG.code_gen("b", "2f")
+                CG.code_gen_label("1", comment="Passed test")
+                CG.code_gen("li", "$t0", 1, comment="Test was true")
+                CG.code_gen_label("2")
+                CG.store_reg(er_result, "$t0", "$t1", "$t2")
+            else:
+                raise SemanticError("Operator %s incompatible with type BOOL"
+                                    % operator,
+                                    CG.source_file_reader.get_line_data())
+
+        elif    er_lhs.data_type == DataTypes.INT or \
+                er_lhs.data_type == DataTypes.CHAR:
+            # We can handle comparisons between chars the same way as ints
+
+            # put lhs in t0 and rhs in t1
+            CG.load_reg(reg_dest="$t0", er_src=er_lhs, reg_temp="$t2")
+            CG.load_reg(reg_dest="$t1", er_src=er_rhs, reg_temp="$t2")
+
+            if operator == "==":
+                CG.code_gen("bne", "$t0", "$t1", "1f")
+            elif operator == "!=":
+                CG.code_gen("beq", "$t0", "$t1", "1f")
+            elif operator == "<=":
+                CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
+                CG.code_gen("bgtz", "$t0", "1f")
+            elif operator == "<":
+                CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
+                CG.code_gen("bgez", "$t0", "1f")
+            elif operator == ">=":
+                CG.code_gen("sub", "$t0", "$t1", "$t0", comment="t0=t1-t0")
+                CG.code_gen("bgtz", "$t0", "1f")
+            elif operator == ">":
+                CG.code_gen("sub", "$t0", "$t1", "$t0", comment="t0=t1-t0")
+                CG.code_gen("bgez", "$t0", "1f")
+            else:
+                raise SemanticError("Operator %s incompatible with type %r"
+                                    % (operator, er_lhs.data_type),
+                                    CG.source_file_reader.get_line_data())
+            CG.code_gen("li", "$t0", 1, comment="Test was true")
+            CG.code_gen("b", "2f")
+            CG.code_gen_label("1", comment="Failed test")
+            CG.code_gen("li", "$t0", 0, comment="Test was false")
+            CG.code_gen_label("2", comment="After test result saved to t0")
+            er_result.data_type=DataTypes.BOOL       # boolean 1=T, 0=F
+            CG.store_reg(er_result, "$t0", "$t1", "$t2")
+
+
+        elif er_lhs.data_type == DataTypes.FLOAT:
+            branch_inst = "bc1f"
+            # put lhs in f0 and rhs in f1
+            CG.load_reg(reg_dest="$f0", er_src=er_lhs, reg_temp="$t0",
+                        use_coprocessor_1=True)
+            CG.load_reg(reg_dest="$f1", er_src=er_rhs, reg_temp="$t0",
+                        use_coprocessor_1=True)
+            if operator == "==":
+                CG.code_gen("c.eq.s", "$f0", "$f1",
+                            comment="Check if equal")
+            elif operator == "!=":
+                CG.code_gen("c.eq.s", "$f0", "$f1",
+                            comment="Check if not equal")
+                # negate result
+                branch_inst = "bc1t"
+            elif operator == "<=":
+                CG.code_gen("c.le.s", "$f0", "$f1")
+            elif operator == "<":
+                CG.code_gen("c.lt.s", "$f0", "$f1")
+            elif operator == ">=":
+                CG.code_gen("c.le.s", "$f1", "$f0")
+            elif operator == ">":
+                CG.code_gen("c.lt.s", "$f1", "$f0")
+            else:
+                raise SemanticError("Operator %s incompatible with type FLOAT"
+                                    % operator,
+                                    CG.source_file_reader.get_line_data())
+            CG.code_gen(branch_inst, "1f")
+            CG.code_gen("li", "$t0", 1, comment="Test was true")
+            CG.code_gen("b", "2f")
+            CG.code_gen_label("1", comment="Failed test")
+            CG.code_gen("li", "$t0", 0, comment="Test was false")
+            CG.code_gen_label("2")
+            er_result.data_type = DataTypes.BOOL       # boolean 1=T, 0=F
+            CG.store_reg(er_result, "$t0", "$t1", "$t2")
+
+        else:
+            raise SemanticError("Cannot make comparison between types %r and "
+                                "%r" % (er_lhs.data_type, er_rhs.data_type),
+                                CG.source_file_reader.get_line_data())
+
+        return er_result
+
+
+
+    @staticmethod
+    def code_gen(instruction, rd=None, rt=None, rs=None, has_label=False,
+                 comment=None):
         """
         Generates a line of code, and inserts it into the code file.
 
@@ -381,19 +498,49 @@ class CG:
         :param comment: Any comment to be added on this line of code
         :return:        None
         """
+
+        # Peephole optimization: size is one instruction
+        if CG.last_instruction:
+            if CG.last_instruction["rd"] == rd and \
+                    CG.last_instruction["rt"] == rt and (
+                        (CG.last_instruction["inst"] == "sw" and
+                         instruction == "lw") or
+                        (CG.last_instruction["inst"] == "swc1" and
+                         instruction == "lwc1")):
+                # we are attempting to load the same word we just stored in
+                # the last instruction, and it's already in the right register,
+                # so we can eliminate this instruction.
+                return
+
+        CG.last_instruction = {
+            "inst": instruction,
+            "rd": rd,
+            "rt": rt,
+            "rs": rs,
+            "has_label": has_label,
+            "comment": comment
+        }
+
         f_comment = ""          # Formatted comment
         if comment is not None:
             f_comment = "# " + comment
 
+        start = "\t%s" % instruction
+        if has_label:
+            # instruction is a label, and it shouldn't be indented
+            start = "%s:" % instruction
+        elif instruction is None:       # it's just a comment
+            start = "\t"
+
         if rd is None:
-            line_of_code = "\t%s\t\t\t%s" % (instruction, f_comment)
+            line_of_code = "%s\t\t\t%s" % (start, f_comment)
         elif rt is None:
-            line_of_code = "\t%s\t%s\t%s" % (instruction, rd, f_comment)
+            line_of_code = "%s\t%s\t%s" % (start, rd, f_comment)
         elif rs is None:
-            line_of_code = "\t%s\t%s,%s\t%s" % (instruction, rd, rt, f_comment)
+            line_of_code = "%s\t%s,%s\t%s" % (start, rd, rt, f_comment)
         else:
-            line_of_code = "\t%s\t%s,%s,%s\t%s" % \
-                           (instruction, rd, rt, rs, f_comment)
+            line_of_code = "%s\t%s,%s,%s\t%s" % \
+                           (start, rd, rt, rs, f_comment)
         CG.output(line_of_code)
 
 
@@ -405,13 +552,14 @@ class CG:
         :param label:       The label to print
         :param comment:     The comment to print. Optional
         """
+        CG.code_gen(label, comment=comment, has_label=True)
 
-        f_comment = ""          # Formatted comment
-        if comment is not None:
-            f_comment = "# " + comment
-
-        line_of_code = label + ":\t\t\t" + f_comment
-        CG.output(line_of_code)
+        # f_comment = ""          # Formatted comment
+        # if comment is not None:
+        #     f_comment = "# " + comment
+        #
+        # line_of_code = label + ":\t\t\t" + f_comment
+        # CG.output(line_of_code)
 
 
 
@@ -421,8 +569,9 @@ class CG:
         Prints a comment on its own line of code.
         :param comment:     The comment to print
         """
-        line_of_code = "\t\t\t\t# " + comment
-        CG.output(line_of_code)
+        CG.code_gen(None, comment=comment)
+        # line_of_code = "\t\t\t\t# " + comment
+        # CG.output(line_of_code)
 
 
 
@@ -431,6 +580,12 @@ class CG:
         """
         Prints data with a label, between lines of code
         """
+        # CG.code_gen(None)
+        # CG.code_gen(".data")
+        # CG.code_gen(label, CG.MIPS_TYPES[data_type][0],
+        #             CG.MIPS_TYPES[data_type][1] % value, has_label=True)
+        # CG.code_gen(None)
+        # CG.code_gen(".text")
         CG.output("")
         CG.output("\t.data")
         CG.output(label + ":\t" + CG.MIPS_TYPES[data_type][0] + "\t" +
@@ -521,6 +676,8 @@ class CG:
             CG.code_gen("li", "$t0", value)
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.CHAR:
+            # Trim quotes off of character's lexeme
+            value = value[1:-1]
             # map escape characters in lexeme
             mapping = {
                 "\\n": '\n',
@@ -528,8 +685,8 @@ class CG:
                 "\\r": '\r',
                 "\\\\": '\\'
             }
-            if value[1:-1] in mapping.keys():
-                value = mapping[value[1:-1]]
+            if value in mapping.keys():
+                value = mapping[value]
             CG.code_gen("li", "$t0", ord(value))
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.FLOAT:
@@ -553,19 +710,20 @@ class CG:
 
     @staticmethod
     def code_gen_assign(er_dest, er_source, src_subscript=None,
-                        dest_subscript=None):
+                        dest_subscript=None, is_cast=False):
         assert(isinstance(er_dest, ExpressionRecord) and
                isinstance(er_source, ExpressionRecord))
 
         dest_type = er_dest.data_type
         source_type = er_source.data_type
+
         # Verify that lhs and rhs types agree:
         if src_subscript and isinstance(src_subscript, ExpressionRecord):
             source_type = DataTypes.array_to_basic(source_type)
         if dest_subscript and isinstance(dest_subscript, ExpressionRecord):
             dest_type = DataTypes.array_to_basic(dest_type)
 
-        if dest_type != source_type:
+        if not is_cast and dest_type != source_type:
             raise SemanticError("Left hand side is not the same type as "
                                 "the right hand side.",
                                 CG.source_file_reader.get_line_data())
@@ -576,22 +734,12 @@ class CG:
 
 
     @staticmethod
-    def code_gen_if(er_lhs, operator, er_rhs, lbl_on_failed_test):
+    def code_gen_if(er_condition, lbl_on_failed_test):
 
-        # put lhs in t0 and rhs in t1
-        CG.load_reg(reg_dest="$t0", er_src=er_lhs, reg_temp="$t2")
-        CG.load_reg(reg_dest="$t1", er_src=er_rhs, reg_temp="$t2")
+        # put er_condition in t0
+        CG.load_reg(reg_dest="$t0", er_src=er_condition, reg_temp="$t2")
 
-        if operator == TokenType.EqualityOperator:
-            CG.code_gen("bne", "$t0", "$t1", lbl_on_failed_test)
-        elif operator == TokenType.NotEqualOperator:
-            CG.code_gen("beq", "$t0", "$t1", lbl_on_failed_test)
-        elif operator == TokenType.LessThanOrEqualOp:
-            CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
-            CG.code_gen("bgtz", "$t0", lbl_on_failed_test)
-        elif operator == TokenType.LessThanOperator:
-            CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
-            CG.code_gen("bgez", "$t0", lbl_on_failed_test)
+        CG.code_gen("beq", "$t0", "$0", lbl_on_failed_test)
 
 
 
@@ -822,38 +970,47 @@ class CG:
     @staticmethod
     def gen_cast(destination_type, param_list):
         """
-        Generates code that turns a char into an int
-        :return:
+        Generates code that changes the datatype of a parameter.
+        Supports changing CHAR -> INT, INT -> FLOAT, FLOAT -> INT
+        :return:    An ExpressionRecord where the parameter ExpressionRecord
+                    has changed to destination_type
         """
         # TODO finish
         if len(param_list) != 1:
             raise SemanticError("Casting functions require one argument",
                                 CG.source_file_reader.get_line_data())
-        exp_rec = param_list[0]
-        assert(isinstance(exp_rec, ExpressionRecord))
+        er_input = param_list[0]
+        assert(isinstance(er_input, ExpressionRecord))
         assert(isinstance(destination_type, DataTypes))
-        if exp_rec.data_type == DataTypes.CHAR and \
+        if er_input.data_type == destination_type:
+            return er_input
+        er_output = CG.create_temp(destination_type)
+
+        if er_input.data_type == DataTypes.CHAR and \
                 destination_type == DataTypes.INT:
-            exp_rec.data_type = DataTypes.INT
-        elif exp_rec.data_type == DataTypes.INT and \
+            CG.code_gen_assign(er_dest=er_output, er_source=er_input,
+                               is_cast=True)
+        elif er_input.data_type == DataTypes.INT and \
                 destination_type == DataTypes.FLOAT:
             # Convert int to float
             # TODO: use CG functions for load and store
-            CG.code_gen("lwc1", "$f0", "%d($fp)" % exp_rec.loc)
+            CG.load_reg("$f0", er_input, reg_temp="$t1", use_coprocessor_1=True)
             CG.code_gen("cvt.s.w", "$f0", "$f0")
-            CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
-        elif exp_rec.data_type == DataTypes.FLOAT and \
+            CG.store_reg(er_output, "$f0", reg_temp="$t1", reg_temp2="$t2",
+                         use_coprocessor_1=True)
+        elif er_input.data_type == DataTypes.FLOAT and \
                 destination_type == DataTypes.INT:
             # Convert float to int
-            CG.code_gen("lwc1", "$f0", "%d($fp)" % exp_rec.loc)
+            CG.load_reg("$f0", er_input, reg_temp="$t1", use_coprocessor_1=True)
             CG.code_gen("cvt.w.s", "$f0", "$f0")
-            CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
-
+            CG.store_reg(er_output, "$f0", reg_temp="$t1", reg_temp2="$t2",
+                         use_coprocessor_1=True)
         else:
             raise SemanticError(
                 "Unsupported operation: cast value of type %r to %r." %
-                (exp_rec.data_type, destination_type),
+                (er_input.data_type, destination_type),
                 CG.source_file_reader.get_line_data())
+        return er_output
 
 
 
@@ -867,7 +1024,8 @@ class CG:
                             send to the function
         :return:            An ExpressionRecord that holds the return value
         """
-        assert(isinstance(func_rec, FunctionSignature))
+        assert isinstance(func_rec, FunctionSignature) and \
+            isinstance(func_rec.label, str)
 
         # store links and saved status
         # store temporaries and local data

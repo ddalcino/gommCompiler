@@ -1,0 +1,65 @@
+func recurse(n int) result int {
+    print("\nDepth is "); print(n); print(" from the bottom.\n");
+    if(0<n){
+        result = 1 + recurse(n-1);
+    } else {
+        result = 1;
+    }
+}
+
+func fibonacci_r(n int) result int {
+    if (n < 1) {
+        result = 0;
+        return;
+    }
+    if (n < 3) {
+        result = 1;
+        return;
+    }
+    result =  fibonacci_r(n - 1) + fibonacci_r(n - 2);
+    return;
+}
+
+func factorial_r(n int) result int {
+    if (2 < n) {
+        result= n * factorial_r(n-1);
+    } else {
+        result = n;
+    }
+}
+
+
+func main() _ int {
+
+    var n int;
+    n = 10;
+    var result int;
+    result = recurse(n);
+    print("Recursed "); print(n); print(" times, result was: "); print(result);
+    print("\n");
+
+    result = fibonacci_r(10);
+    print("Fib number "); print(n); print(" is: "); print(result);
+    print("\n");
+
+    while (0 <= n) {
+        print("\nEnter an int: [negative to quit]: ");
+
+        n = read_int();
+
+        result = fibonacci_r(n);
+
+        print("Fibonacci Sequence element #");
+        print(n);
+        print(" is: ");
+        print(result);
+        print("\n");
+
+        result = factorial_r(n);
+        print(n);
+        print(" factorial is: ");
+        print(result);
+        print("\n");
+
+    }
+}

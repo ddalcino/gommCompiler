@@ -1,0 +1,20 @@
+func main() result int {
+    var n int;
+    var a int;
+    a = 5;
+    print("\na is "); print(a);
+    n = 5;
+    print("\nn is "); print(n);
+    a = n;
+    print("\na is "); print(a);
+    a = a + n;
+    print("\na+n is "); print(a);
+    a = a * n;
+    print("\na*n is "); print(a);
+    a = a+a*n-2;
+    print("\na+a*n-2 is "); print(a);
+    a = a*(a+n)/2;
+    print("\na*(a+n)/2 is "); print(a);
+    result = a;
+    return;
+}

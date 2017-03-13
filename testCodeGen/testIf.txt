@@ -1,0 +1,83 @@
+func main() result int {
+    # func testIf() result int {
+    var a int;
+    var n int;
+    print("Enter an int (n): ");
+    n = read_int();
+    print("Enter an int (a): ");
+    a = read_int();
+    if (n < 0) {
+        print("n is less than 0\n");
+    }
+    if (n <= 0) {
+        print("n is less than or equal to 0\n");
+    }
+    if (n < 0) {
+        if (a < 0) {
+            print("n < 0 and a < 0\n");
+        }
+    }
+    if (n < 0) {
+        if (a < 0) {
+            print("n < 0 and a < 0\n");
+        } else {
+            print("n < 0 and a >= 0\n");
+        }
+    }
+    if (n < 0) {
+        if (a < 0) {
+            print("n < 0 and a < 0\n");
+        }
+    } else {
+        print("n >= 0\n");
+    }
+    #return;
+#}
+
+#func testWhile() result int {
+    # var n int;
+    n = 10;
+    while (0 < n) {
+        print(n);
+        print("\n");
+        n = n - 1;
+    }
+#}
+
+    #func fibonacci() result int {
+    # var n int;
+
+    n = 0;
+
+    while (0 <= n) {
+        print("Fibonacci Sequence:\n");
+        print("Enter int n, and I'll tell you the nth Fibonacci number.\n");
+        print("[or a negative number to quit]: ");
+
+        n = read_int();
+
+        if (n < 1) {
+            result = 0;
+            return;
+        }
+        result = 1;
+        var last int;
+        last = 0;
+        var temp int;
+        var i int;
+        i = 1;
+        while (i < n) {
+            temp = last + result;
+            last = result;
+            result = temp;
+            i = i + 1;
+        }
+
+        print("Fibonacci Sequence element #");
+        print(n);
+        print(" is: ");
+        print(result);
+        print("\n");
+    }
+}
+

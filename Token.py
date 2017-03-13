@@ -38,10 +38,11 @@ class TokenType(Enum):
     CloseBracket = 15
     Semicolon = 16
     AssignmentOperator = 17
-    EqualityOperator = 18
-    NotEqualOperator = 19
-    LessThanOrEqualOp = 20
-    LessThanOperator = 21
+    RelationalOperator = 18
+    # EqualityOperator = 18
+    # NotEqualOperator = 19
+    # LessThanOrEqualOp = 20
+    # LessThanOperator = 21
     Comma = 22
     String = 23
     KeywordIf = 24
@@ -54,6 +55,7 @@ class TokenType(Enum):
     KeywordChar = 31
     KeywordVar = 32
     KeywordBool = 33
+    KeywordProto = 34
 
 
 
@@ -63,28 +65,23 @@ class DataTypes(Enum):
     FLOAT = 2
     CHAR = 3
     STRING = 4
-    ARRAY_INT = 5
-    ARRAY_FLOAT = 6
-    ARRAY_CHAR = 7
-    ARRAY_STRING = 8
-    # FUNC_INT = 9
-    # FUNC_FLOAT = 10
-    # FUNC_CHAR = 11
-    # FUNC_STRING = 12
-    # FUNC_ARRAY_INT = 13
-    # FUNC_ARRAY_FLOAT = 14
-    # FUNC_ARRAY_CHAR = 15
-    # FUNC_ARRAY_STRING = 16
+    BOOL = 5            # not declarable
+    ARRAY_INT = 6
+    ARRAY_FLOAT = 7
+    ARRAY_CHAR = 8
+    ARRAY_STRING = 9
+    ARRAY_BOOL = 10
 
 
 
     @staticmethod
     def basic_to_array(data_type):
         mapping = {
-            DataTypes.INT: DataTypes.ARRAY_INT,
-            DataTypes.FLOAT: DataTypes.ARRAY_FLOAT,
-            DataTypes.CHAR: DataTypes.ARRAY_CHAR,
-            DataTypes.STRING: DataTypes.ARRAY_STRING
+            DataTypes.INT:      DataTypes.ARRAY_INT,
+            DataTypes.FLOAT:    DataTypes.ARRAY_FLOAT,
+            DataTypes.CHAR:     DataTypes.ARRAY_CHAR,
+            DataTypes.STRING:   DataTypes.ARRAY_STRING,
+            DataTypes.BOOL:     DataTypes.ARRAY_BOOL,
         }
         return mapping[data_type]
 
@@ -93,35 +90,20 @@ class DataTypes(Enum):
     @staticmethod
     def is_array(data_type):
         return data_type in (DataTypes.ARRAY_INT, DataTypes.ARRAY_FLOAT,
-                             DataTypes.ARRAY_CHAR, DataTypes.ARRAY_STRING)
+                             DataTypes.ARRAY_CHAR, DataTypes.ARRAY_STRING,
+                             DataTypes.ARRAY_BOOL)
 
 
     @staticmethod
     def array_to_basic(data_type):
         mapping = {
-            DataTypes.ARRAY_INT: DataTypes.INT,
-            DataTypes.ARRAY_FLOAT: DataTypes.FLOAT,
-            DataTypes.ARRAY_CHAR: DataTypes.CHAR,
-            DataTypes.ARRAY_STRING: DataTypes.STRING
+            DataTypes.ARRAY_INT:    DataTypes.INT,
+            DataTypes.ARRAY_FLOAT:  DataTypes.FLOAT,
+            DataTypes.ARRAY_CHAR:   DataTypes.CHAR,
+            DataTypes.ARRAY_STRING: DataTypes.STRING,
+            DataTypes.ARRAY_BOOL:   DataTypes.BOOL,
         }
         return mapping[data_type]
-
-
-
-    # @staticmethod
-    # def function_that_returns_type(return_type):
-    #     mapping = {
-    #         DataTypes.INT: DataTypes.FUNC_INT,
-    #         DataTypes.FLOAT: DataTypes.FUNC_FLOAT,
-    #         DataTypes.CHAR: DataTypes.FUNC_CHAR,
-    #         DataTypes.STRING: DataTypes.FUNC_STRING,
-    #         DataTypes.ARRAY_INT: DataTypes.FUNC_ARRAY_INT,
-    #         DataTypes.ARRAY_FLOAT: DataTypes.FUNC_ARRAY_FLOAT,
-    #         DataTypes.ARRAY_CHAR: DataTypes.FUNC_ARRAY_CHAR,
-    #         DataTypes.ARRAY_STRING: DataTypes.FUNC_ARRAY_STRING,
-    #     }
-    #     return mapping[return_type]
-
 
 
 
@@ -140,10 +122,10 @@ class Token:
         TokenType.CloseBracket: "]",
         TokenType.Semicolon: ";",
         TokenType.AssignmentOperator: "=",
-        TokenType.EqualityOperator: "==",
-        TokenType.NotEqualOperator: "!=",
-        TokenType.LessThanOrEqualOp: "<=",
-        TokenType.LessThanOperator: "<",
+        # TokenType.EqualityOperator: "==",
+        # TokenType.NotEqualOperator: "!=",
+        # TokenType.LessThanOrEqualOp: "<=",
+        # TokenType.LessThanOperator: "<",
         TokenType.KeywordBool: "bool",
         TokenType.KeywordChar: "char",
         TokenType.KeywordElse: "else",
@@ -154,6 +136,7 @@ class Token:
         TokenType.KeywordReturn: "return",
         TokenType.KeywordVar: "var",
         TokenType.KeywordWhile: "while",
+        TokenType.KeywordProto: "proto",
     }
 
 
@@ -166,6 +149,7 @@ class Token:
         "func":     TokenType.KeywordFunc,
         "if":       TokenType.KeywordIf,
         "int":      TokenType.KeywordInt,
+        "proto":    TokenType.KeywordProto,
         "return":   TokenType.KeywordReturn,
         "var":      TokenType.KeywordVar,
         "while":    TokenType.KeywordWhile,
