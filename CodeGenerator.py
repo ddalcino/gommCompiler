@@ -1,6 +1,7 @@
 from Token import TokenType, DataTypes
 from Errors import *
 
+disable_pass_by_reference = False
 
 class ExpressionRecord:
 
@@ -23,6 +24,13 @@ class ExpressionRecord:
         self.data_type = data_type
         self.is_temp = is_temp
         self.is_ref = is_reference
+
+
+
+    def is_array(self):
+        return DataTypes.is_array(self.data_type)
+
+
 
     def __str__(self):
         return str(self.data_type).split('.')[-1] + " @%d" % self.loc
@@ -156,10 +164,13 @@ class CG:
             "while": 0,
         }
         CG.BUILT_IN_FUNCTIONS = {
-            "print": CG.gen_print,
-            "read_int": CG.gen_read_int,
-            "read_float": CG.gen_read_float,
-            "read_char": CG.gen_read_char,
+            "print":        (CG.gen_print, None),
+            "read_int":     (CG.gen_read, DataTypes.INT),
+            "read_float":   (CG.gen_read, DataTypes.FLOAT),
+            "read_char":    (CG.gen_read, DataTypes.CHAR),
+            "cast_int":     (CG.gen_cast, DataTypes.INT),
+            "cast_float":   (CG.gen_cast, DataTypes.FLOAT),
+            "cast_char":    (CG.gen_cast, DataTypes.CHAR),
         }
         CG.source_file_reader = source_file_reader
 
@@ -330,8 +341,8 @@ class CG:
 
         if er_result.data_type == DataTypes.INT:
 
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
+            CG.load_reg("$t0", er_lhs, "$t1")
+            CG.load_reg("$t1", er_rhs, "$t2")
             CG.code_gen(instruction, "$t0", "$t0", "$t1")
 
             # Mod needs an extra instruction: move result from HI register to t0
@@ -339,17 +350,22 @@ class CG:
                 CG.code_gen("mfhi", "$t0", comment="Modulus: remainder is in "
                                                    "HI register")
 
-            CG.code_gen("sw", "$t0", "%d($fp)" % er_result.loc)
+            CG.store_reg(er_result, reg_src="$t0", reg_temp="$t1",
+                         reg_temp2="$t2")
             return er_result
 
         elif er_result.data_type == DataTypes.FLOAT:
 
-            CG.code_gen("lwc1", "$f0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lwc1", "$f1", "%d($fp)" % er_rhs.loc)
+            CG.load_reg("$f0", er_lhs, "$t1", use_coprocessor_1=True)
+            CG.load_reg("$f1", er_rhs, "$t2", use_coprocessor_1=True)
             CG.code_gen(instruction, "$f0", "$f0", "$f1")
-            CG.code_gen("swc1", "$f0", "%d($fp)" % er_result.loc)
+            CG.store_reg(er_result, reg_src="$f0", reg_temp="$t0",
+                         reg_temp2="$t1", use_coprocessor_1=True)
             return er_result
-        # TODO: handle else
+        raise SemanticError(
+            "Unsupported operation: %s on values of type %r." %
+            (operator, er_lhs.data_type),
+            CG.source_file_reader.get_line_data())
 
 
 
@@ -443,18 +459,27 @@ class CG:
 
 
     @staticmethod
-    def push_var(source_exp_rec):
+    def push_param(source_exp_rec):
         """
-        Pushes a copy of a variable on the stack
+        Pushes a reference to a variable on the stack
         :param source_exp_rec:   ExpressionRecord for the variable to push
         """
         var = ExpressionRecord(data_type=source_exp_rec.data_type,
-                               loc=CG.next_offset, is_temp=False)
+                               loc=CG.next_offset, is_temp=False,
+                               is_reference=True)
         CG.next_offset -= 4
-        # CG.code_gen("addi", "$sp", "$sp", -4,
-        CG.code_gen_comment(comment="Reserve a word on stack for param at "
-                                    "%d($fp)" % var.loc)
-        CG.code_gen_assign(var, source_exp_rec)
+
+        # if source is a reference, just copy the reference
+        if source_exp_rec.is_ref:
+            CG.code_gen("lw", "$t0", "%d($fp)" % source_exp_rec.loc,
+                        comment="Copy existing pointer")
+        # otherwise, make a pointer to the data
+        else:
+            CG.code_gen("addi", "$t0", "$fp", "%d" % source_exp_rec.loc,
+                        comment="Make pointer")
+        # put it on the stack
+        CG.code_gen("sw", "$t0", "%d($fp)" % var.loc,
+                    comment="Add param to stack for param at %d($fp)" % var.loc)
 
 
 
@@ -496,6 +521,15 @@ class CG:
             CG.code_gen("li", "$t0", value)
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.CHAR:
+            # map escape characters in lexeme
+            mapping = {
+                "\\n": '\n',
+                "\\t": '\t',
+                "\\r": '\r',
+                "\\\\": '\\'
+            }
+            if value[1:-1] in mapping.keys():
+                value = mapping[value[1:-1]]
             CG.code_gen("li", "$t0", ord(value))
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.FLOAT:
@@ -518,189 +552,308 @@ class CG:
 
 
     @staticmethod
-    def code_gen_assign(er_lhs, er_rhs):
-        assert(isinstance(er_lhs, ExpressionRecord) and
-               isinstance(er_rhs, ExpressionRecord))
+    def code_gen_assign(er_dest, er_source, src_subscript=None,
+                        dest_subscript=None):
+        assert(isinstance(er_dest, ExpressionRecord) and
+               isinstance(er_source, ExpressionRecord))
 
-        if er_lhs.data_type != er_rhs.data_type:
+        dest_type = er_dest.data_type
+        source_type = er_source.data_type
+        # Verify that lhs and rhs types agree:
+        if src_subscript and isinstance(src_subscript, ExpressionRecord):
+            source_type = DataTypes.array_to_basic(source_type)
+        if dest_subscript and isinstance(dest_subscript, ExpressionRecord):
+            dest_type = DataTypes.array_to_basic(dest_type)
+
+        if dest_type != source_type:
             raise SemanticError("Left hand side is not the same type as "
                                 "the right hand side.",
                                 CG.source_file_reader.get_line_data())
 
-        if er_lhs.data_type == DataTypes.INT:
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_rhs.loc)
-            CG.code_gen("sw", "$t0", "%d($fp)" % er_lhs.loc)
-        elif er_lhs.data_type == DataTypes.FLOAT:
-            CG.code_gen("lwc1", "$f0", "%d($fp)" % er_rhs.loc)
-            CG.code_gen("swc1", "$f0", "%d($fp)" % er_lhs.loc)
+        CG.store_er(er_dest=er_dest, er_src=er_source,
+                    src_subscript=src_subscript, dest_subscript=dest_subscript)
 
 
 
     @staticmethod
     def code_gen_if(er_lhs, operator, er_rhs, lbl_on_failed_test):
 
+        # put lhs in t0 and rhs in t1
+        CG.load_reg(reg_dest="$t0", er_src=er_lhs, reg_temp="$t2")
+        CG.load_reg(reg_dest="$t1", er_src=er_rhs, reg_temp="$t2")
+
         if operator == TokenType.EqualityOperator:
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
             CG.code_gen("bne", "$t0", "$t1", lbl_on_failed_test)
-            pass
         elif operator == TokenType.NotEqualOperator:
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
             CG.code_gen("beq", "$t0", "$t1", lbl_on_failed_test)
         elif operator == TokenType.LessThanOrEqualOp:
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
             CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
             CG.code_gen("bgtz", "$t0", lbl_on_failed_test)
         elif operator == TokenType.LessThanOperator:
-            CG.code_gen("lw", "$t0", "%d($fp)" % er_lhs.loc)
-            CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc)
             CG.code_gen("sub", "$t0", "$t0", "$t1", comment="t0=t0-t1")
             CG.code_gen("bgez", "$t0", lbl_on_failed_test)
 
 
 
     @staticmethod
-    def assign_to_array_entry(er_array, er_subscript, er_rhs):
+    def make_pointer_to_element_in_array(er_array, er_subscript,
+                                         reg_dest, reg_temp):
         """
+        Makes a pointer to a value at array[subscript], and puts it in the
+        destination register
         :param er_array:        The ExpressionRecord for an array
-        :param er_subscript:    The subscript into that array
-        :param er_rhs:        The ExpressionRecord to copy into array[subscript]
-        """
-
-        # We want to generate this code:
-        # lw $t1,er_rhs.loc($fp)        #put rhs value in t1
-        # lw $t0,er_subscript.loc($fp)  #puts the subscript in t0
-        # addi $t0,$t0,er_array.loc     #t0 has the offset of desired location
-        # add $t0,$t0,$sp               #t0 has the address of desired location
-        # sw $t1,($t0)                  #store rhs in desired location
-        CG.code_gen("lw", "$t0", "%d($fp)" % er_subscript.loc,
-                    comment="put subscript in t0")
-        # multiply subscript by 4
-        CG.code_gen("sll", "$t0", "$t0", 2, comment="multiply subscript by 4")
-        # offset of destination, from $sp, is er_array.loc - t0
-        CG.code_gen("li", "$t1", er_array.loc)
-        CG.code_gen("sub", "$t0", "$t1", "$t0",
-                    comment="offset of destination is array_location - t0")
-        CG.code_gen("add", "$t0", "$t0", "$fp",
-                    comment="calculate address of destination")
-        CG.code_gen("lw", "$t1", "%d($fp)" % er_rhs.loc,
-                    comment="put rhs value in t1")
-        CG.code_gen("sw", "$t1", "($t0)", comment="store rhs in destination")
-
-
-
-    @staticmethod
-    def array_entry_to_temp_val(er_array, er_subscript):
-        """
-        Copies an array entry into a temp ExpressionRecord on the stack
-        :param er_array:        The ExpressionRecord for an array
-        :param er_subscript:    The subscript into that array
+        :param er_subscript:    The subscript into that array,
+                                as an ExpressionRecord
+        :param reg_dest:        The destination register
+        :param reg_temp:        The temp register
         :return:                A temporary ExpressionRecord, holds value at
                                 er_array[er_subscript]
         """
-        # make space to hold temp value
-        exp_rec = CG.create_temp(DataTypes.array_to_basic(er_array.data_type))
+        assert(isinstance(er_array, ExpressionRecord) and
+               isinstance(er_subscript, ExpressionRecord))
 
-        CG.code_gen("lw", "$t0", "%d($fp)" % er_subscript.loc,
-                    comment="put subscript in t0")
-        # multiply subscript by 4
-        CG.code_gen("sll", "$t0", "$t0", 2, comment="multiply subscript by 4")
-        # offset of source, from $sp, is er_array.loc - t0
-        CG.code_gen("li", "$t1", er_array.loc)
-        CG.code_gen("sub", "$t0", "$t1", "$t0",
-                    comment="offset of source is array_location - t0")
-        CG.code_gen("add", "$t0", "$t0", "$fp",
-                    comment="calculate address of source")
-        CG.code_gen("lw", "$t0", "($t0)", comment="Dereference t0")
-        CG.code_gen("sw", "$t0", "%d($fp)" % exp_rec.loc,
-                    comment="store value on stack")
-        return exp_rec
+        # Put subscript into temp register
+        CG.load_reg(reg_temp, er_subscript, reg_dest)
+        # CG.code_gen("lw", reg_temp, "%d($fp)" % er_subscript.loc,
+        #             comment="put subscript in "+reg_temp)
+        CG.code_gen("sll", reg_temp, reg_temp, 2,
+                    comment="multiply subscript by 4")
+
+        # make a pointer to the array, store it in destination register
+        if er_array.is_ref:
+            # load pointer to array into reg_dest
+            CG.code_gen("lw", reg_dest, "%d($fp)" % er_array.loc,
+                        comment="load pointer to array into " + reg_dest)
+        else:
+            # array is on the stack; it starts at fp + er_array.loc
+            CG.code_gen("addi", reg_dest, "$fp", er_array.loc,
+                        comment="make pointer to array in " + reg_dest)
+
+        # reg_dest will be a pointer to the value at array[subscript]
+        # reg_dest = location of array - subscript*4
+        CG.code_gen("sub", reg_dest, reg_dest, reg_temp,
+                    comment=reg_dest+" points to value at array[subscript]")
 
 
 
     @staticmethod
-    def gen_print(exp_rec_list):
+    def gen_print(datatype, param_list):
         """
         Generates inline code that calls the syscall for the appropriate
         print function
-        :param exp_rec_list:   the ExpressionRecord that holds the value we want
-                            to print
+        :param datatype:    Not used. Necessary for the other built-in
+                            functions, but this one can get the necessary
+                            datatype info from param_list
+        :param param_list:  the list of ExpressionRecords that holds the
+                            values we want to print.
         """
-        assert(len(exp_rec_list) == 1)
-        exp_rec = exp_rec_list[0]
-        assert(isinstance(exp_rec, ExpressionRecord))
-        if exp_rec.data_type == DataTypes.INT:
-            CG.code_gen("lw", "$a0", "%d($fp)" % exp_rec.loc,
-                        comment="Move int to a0")
-            CG.code_gen("li", "$v0", 1, comment="Syscall for print_int")
+        for er_param in param_list:
+            assert(isinstance(er_param, ExpressionRecord))
+            if er_param.data_type == DataTypes.INT:
+                CG.code_gen_comment("print(int)")
+                CG.load_reg("$a0", er_param, reg_temp="$t1", src_subscript=None)
+                CG.code_gen("li", "$v0", 1, comment="Syscall for print_int")
+                CG.code_gen("syscall")
+            elif er_param.data_type == DataTypes.FLOAT:
+                CG.code_gen_comment("print(float)")
+                CG.load_reg(reg_dest="$f12", er_src=er_param, reg_temp="$t1",
+                            src_subscript=None, use_coprocessor_1=True)
+                CG.code_gen("li", "$v0", 2, comment="Syscall for print_float")
+                CG.code_gen("syscall")
+            elif er_param.data_type == DataTypes.CHAR:
+                CG.code_gen_comment("print(char)")
+                CG.load_reg("$a0", er_param, reg_temp="$t1", src_subscript=None)
+                CG.code_gen("li", "$v0", 11, comment="Syscall for print_char")
+                CG.code_gen("syscall")
+            elif er_param.data_type == DataTypes.STRING:
+                CG.code_gen_comment("print(string)")
+                CG.load_reg("$a0", er_param, reg_temp="$t1", src_subscript=None)
+                CG.code_gen("li", "$v0", 4, comment="Syscall for print_string")
+                CG.code_gen("syscall")
+            else:
+                raise SemanticError("Unsupported argument for print()",
+                                    CG.source_file_reader.get_line_data())
+
+
+
+    @staticmethod
+    def gen_read(datatype, param_list):
+        """
+        Generates code that calls the read_int, read_float, or read_char
+        syscalls.
+        :param datatype:    The datatype of the variable to be read
+        :param param_list:  Not used. Required for other built-in functions.
+        :return:            An ExpressionRecord that holds the result.
+        """
+        # Make a temp ExpressionRecord to hold the result
+        exp_rec = CG.create_temp(datatype)
+
+        if datatype == DataTypes.INT:
+            CG.code_gen("li", "$v0", 5, comment="Syscall for read_int")
             CG.code_gen("syscall")
-        elif exp_rec.data_type == DataTypes.FLOAT:
-            CG.code_gen("lwc1", "$f12", "%d($fp)" % exp_rec.loc,
-                        comment="Move float to f12")
-            CG.code_gen("li", "$v0", 2, comment="Syscall for print_float")
+            CG.code_gen("sw", "$v0", "%d($fp)" % exp_rec.loc)
+        elif datatype == DataTypes.FLOAT:
+            CG.code_gen("li", "$v0", 6, comment="Syscall for read_float")
             CG.code_gen("syscall")
-        elif exp_rec.data_type == DataTypes.CHAR:
-            CG.code_gen("lw", "$a0", "%d($fp)" % exp_rec.loc,
-                        comment="Move char to a0")
-            CG.code_gen("li", "$v0", 11, comment="Syscall for print_char")
+            CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
+        elif datatype == DataTypes.CHAR:
+            CG.code_gen("li", "$v0", 12, comment="Syscall for read_char")
             CG.code_gen("syscall")
-        elif exp_rec.data_type == DataTypes.STRING:
-            CG.code_gen("lw", "$a0", "%d($fp)" % exp_rec.loc,
-                        comment="Move string address to a0")
-            CG.code_gen("li", "$v0", 4, comment="Syscall for print_string")
-            CG.code_gen("syscall")
+            CG.code_gen("sw", "$v0", "%d($fp)" % exp_rec.loc)
+        return exp_rec
+
+
+
+    @staticmethod
+    def store_er(er_dest, er_src, dest_subscript=None, src_subscript=None):
+        """
+        Stores the contents of er_src in er_dest.
+        If either er_dest or er_src are references, it dereferences them
+        before making the assignment.
+        If either er_dest or er_src are arrays, it uses the appropriate
+        subscripts to figure out where the value should be loaded from or
+        assigned.
+        :param er_dest:         The destination ExpressionRecord
+        :param er_src:          The source ExpressionRecord
+        :param dest_subscript:  The destination subscript ExpressionRecord
+        :param src_subscript:   The source subscript ExpressionRecord
+        :return:                None
+        """
+        assert isinstance(er_src, ExpressionRecord) and \
+               isinstance(er_dest, ExpressionRecord)
+        reg_value_to_store = "$t0"
+        reg_temp = "$t1"
+        reg_temp2 = "$t2"
+
+        # Load whatever is in er_src into reg_value_to_store
+        CG.load_reg(reg_dest=reg_value_to_store, er_src=er_src,
+                    reg_temp=reg_temp, src_subscript=src_subscript)
+
+        # Store whatever is in reg_value_to_store in er_dest
+        CG.store_reg(er_dest, reg_src=reg_value_to_store, reg_temp=reg_temp,
+                     reg_temp2=reg_temp2, dest_subscript=dest_subscript)
+
+
+
+    @staticmethod
+    def load_reg(reg_dest, er_src, reg_temp, src_subscript=None,
+                 use_coprocessor_1=False):
+        """
+        Loads whatever value that a source ExpressionRecord points to into a
+        register
+        :param reg_dest:        The register that will hold the desired value
+        :param er_src:          The ExpressionRecord that points to the value
+        :param src_subscript:   Subscript into er_src, if er_src is an array.
+                                Must be an ExpressionRecord.
+        :param use_coprocessor_1:   If the value needs to be loaded into a
+                                    floating point register, this will cause
+                                    the 'lwc1' instruction to be used instead of
+                                    'lw'.
+        :return:
+        """
+        assert isinstance(er_src, ExpressionRecord)
+
+        instruction = "lw"
+        if use_coprocessor_1:
+            instruction = "lwc1"
+
+        if er_src.is_array():
+            assert isinstance(src_subscript, ExpressionRecord)
+            # put ptr to source data in reg_value_to_store
+            CG.make_pointer_to_element_in_array(er_src, src_subscript,
+                                                reg_dest, reg_temp)
+            # dereference ptr to source data; put it in reg_value_to_store
+            CG.code_gen(instruction, reg_dest, "(%s)" % reg_dest)
+        elif er_src.is_ref:
+            # put ptr to source data in reg_value_to_store
+            CG.code_gen(instruction, reg_dest, "%d($fp)" % er_src.loc)
+            # dereference ptr to source data; put it in reg_value_to_store
+            CG.code_gen(instruction, reg_dest, "(%s)" % reg_dest)
         else:
-            raise SemanticError("Unsupported argument for print()",
+            # put source data in reg_value_to_store
+            CG.code_gen(instruction, reg_dest, "%d($fp)" % er_src.loc)
+
+
+
+    @staticmethod
+    def store_reg(er_dest, reg_src, reg_temp, reg_temp2, dest_subscript=None,
+                  use_coprocessor_1=False):
+        """
+        Copies the value in a source register to er_dest. If er_dest is a
+        reference, it dereferences it before making the assignment. If
+        er_dest is an array, it uses the destination subscript to figure out
+        where the value should be assigned.
+        :param er_dest:         The destination ExpressionRecord
+        :param reg_src:         The source register
+        :param reg_temp:        A temporary register
+        :param reg_temp2:       A different temp register
+        :param dest_subscript:  The destination subscript ExpressionRecord
+        :param use_coprocessor_1:   Set this to true if you need to store
+                                    floating point numbers in coprocessor 1.
+        :return:                None
+        """
+        assert isinstance(er_dest, ExpressionRecord)
+
+        store_inst = "sw"
+        if use_coprocessor_1:
+            store_inst = "swc1"
+
+        if er_dest.is_array():
+            assert isinstance(dest_subscript, ExpressionRecord)
+
+            # put ptr to destination in reg_temp
+            CG.make_pointer_to_element_in_array(er_dest, dest_subscript,
+                                                reg_temp, reg_temp2)
+            # store source data in destination
+            CG.code_gen(store_inst, reg_src, "(%s)" % reg_temp,
+                        comment="Store data at array[subscript]")
+        elif er_dest.is_ref:
+            # put ptr to destination in reg_temp
+            CG.code_gen("lw", reg_temp, "%d($fp)" % er_dest.loc)
+            # store source data in destination
+            CG.code_gen(store_inst, reg_src, "(%s)" % reg_temp,
+                        comment="Store data by reference")
+        else:
+            CG.code_gen(store_inst, reg_src, "%d($fp)" % er_dest.loc,
+                        comment="Store directly on the stack")
+
+
+
+    @staticmethod
+    def gen_cast(destination_type, param_list):
+        """
+        Generates code that turns a char into an int
+        :return:
+        """
+        # TODO finish
+        if len(param_list) != 1:
+            raise SemanticError("Casting functions require one argument",
                                 CG.source_file_reader.get_line_data())
+        exp_rec = param_list[0]
+        assert(isinstance(exp_rec, ExpressionRecord))
+        assert(isinstance(destination_type, DataTypes))
+        if exp_rec.data_type == DataTypes.CHAR and \
+                destination_type == DataTypes.INT:
+            exp_rec.data_type = DataTypes.INT
+        elif exp_rec.data_type == DataTypes.INT and \
+                destination_type == DataTypes.FLOAT:
+            # Convert int to float
+            # TODO: use CG functions for load and store
+            CG.code_gen("lwc1", "$f0", "%d($fp)" % exp_rec.loc)
+            CG.code_gen("cvt.s.w", "$f0", "$f0")
+            CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
+        elif exp_rec.data_type == DataTypes.FLOAT and \
+                destination_type == DataTypes.INT:
+            # Convert float to int
+            CG.code_gen("lwc1", "$f0", "%d($fp)" % exp_rec.loc)
+            CG.code_gen("cvt.w.s", "$f0", "$f0")
+            CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
 
-
-
-    @staticmethod
-    def gen_read_int():
-        """
-        Generates code that calls the read_int syscall.
-        """
-        # Make a temp ExpressionRecord to hold the result
-        exp_rec = CG.create_temp(DataTypes.INT)
-
-        CG.code_gen("li", "$v0", 5, comment="Syscall for read_int")
-        CG.code_gen("syscall")
-        CG.code_gen("sw", "$v0", "%d($fp)" % exp_rec.loc)
-        return exp_rec
-
-
-
-    @staticmethod
-    def gen_read_float():
-        """
-        Generates code that calls the read_float syscall.
-        """
-
-        # Make a temp ExpressionRecord to hold the result
-        exp_rec = CG.create_temp(DataTypes.FLOAT)
-
-        CG.code_gen("li", "$v0", 6, comment="Syscall for read_float")
-        CG.code_gen("syscall")
-        CG.code_gen("swc1", "$f0", "%d($fp)" % exp_rec.loc)
-        return exp_rec
-
-
-
-    @staticmethod
-    def gen_read_char():
-        """
-        Generates code that calls the read_char syscall.
-        """
-
-        # Make a temp ExpressionRecord to hold the result
-        exp_rec = CG.create_temp(DataTypes.CHAR)
-
-        CG.code_gen("li", "$v0", 12, comment="Syscall for read_char")
-        CG.code_gen("syscall")
-        CG.code_gen("sw", "$v0", "%d($fp)" % exp_rec.loc)
-        return exp_rec
+        else:
+            raise SemanticError(
+                "Unsupported operation: cast value of type %r to %r." %
+                (exp_rec.data_type, destination_type),
+                CG.source_file_reader.get_line_data())
 
 
 
@@ -719,10 +872,13 @@ class CG:
         # store links and saved status
         # store temporaries and local data
         # store parameters and returned value
-        er_retval = CG.declare_variable(func_rec.return_type, "return_var", 1)
+        # TODO: should not declare a new variable, just make space on stack
+        er_retval = CG.declare_variable(func_rec.return_type, "return_var",
+                                        size=1)
+
         for er_param in params:
             # push param val on stack
-            CG.push_var(er_param)
+            CG.push_param(er_param)
 
         # In new function, return var is at (4*len(params)+8)($fp),
         # params are at 4($fp) thru (4*len(params)+4)($fp)

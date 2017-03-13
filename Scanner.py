@@ -88,6 +88,7 @@ delta = {
         
         "#": "Comment",
         "\"": "String_Begun",
+        "'": "Char_Begun",
 
         # Special characters that could be part of a multi-character token
         "=": "Assignment_Accept",
@@ -164,6 +165,21 @@ delta = {
         "\n": "Sink_State",
         ANYTHING_ELSE: "String_Begun"
     },
+    "Char_Begun": {
+        "\\": "Char_Escape",
+        ANYTHING_ELSE: "Char_Has_Char"
+    },
+    "Char_Escape": {
+        "r": "Char_Has_Char",
+        "n": "Char_Has_Char",
+        "t": "Char_Has_Char",
+        "\\": "Char_Has_Char",
+    },
+    "Char_Has_Char": {
+        "'": "Char_Accept"
+    },
+
+    "Char_Accept": {},
     "String_Accept": {},
     "Comment_Accept": {},
 
@@ -200,6 +216,7 @@ token_type_for_accept_state = {
     "Float_Accept":         tt.Float,
     "ID":                   tt.Identifier,
     "String_Accept":        tt.String,
+    "Char_Accept":          tt.Char,
     "Comment_Accept":       tt.Comment,     # these tokens will be ignored
 
     "Assignment_Accept":    tt.AssignmentOperator,

@@ -41,62 +41,64 @@ func gcd(a int, b int) k int {
     }
     return;
 }
-func bubble_sort(array [20]int, size int) _ int {
+func bubble_sort(array [10]int, size int) _ int {
     var swapped int;
     swapped = 1;
     var j int;
     var temp int;
+    var i int;
+    i = 0;
     while (0 < swapped) {                   # while swapped == true
         swapped = 0;                        # false
-        j = 0;
-        while (j < size) {
+        j = 1;
+        while (j < size-i) {
             if (array[j] < array[j-1]) {    # swap
                 temp = array[j-1];
                 array[j-1] = array[j];
                 array[j] = temp;
                 swapped = 1;                # true
             }
+            j = j+1;
         }
+        i = i+1;
     }
     return;
 }
 func sort20() _ int {
-    prints("Sort 20 values: Please input 20 integers.\n");
-    var array [20]int;
+    print("Sort 10 values: Please input 10 integers.\n");
+    var array [10]int;
     var j int;
     j = 0;
-    while (j < 20) {
+    while (j < 10) {
         array[j] = read_int();
+        j = j+1;
     }
-    bubble_sort(array, 20);
-    prints("Sorted list:\n");
+    bubble_sort(array, 10);
+    print("Sorted list:\n");
     j = 0;
-    while (j < 20) {
-        print(array[j]);
-        print("\n");
+    while (j < 10) {
+        print(array[j], '\n');
+        j = j+1;
     }
     return;
 }
 func main() _ int {
-    prints("GCD of 2 values: Please input 2 integers.\n");
+    print("GCD of 2 values: Please input 2 integers.\n");
     var a int;
     var b int;
     var d int;
     a = read_int();
     b = read_int();
     d = gcd(a, b);
-    prints("GCD of "); print(a); prints(" and "); print(b); prints(" is: ");
-    print(d); prints(".\n\n");
+    print("GCD of ", a, " and ", b, " is: ", d, ".\n\n");
 
     sort20();
 
-    prints("Fibonacci sequence: Please input an integer.\n");
-    var a int;
+    print("Fibonacci sequence: Please input an integer.\n");
     var fib int;
     a = read_int();
     fib = fibonacci(a);
 
-    prints("Fibonacci Number "); print(a); prints(" is: "); print(fib);
-    prints(".\n\n");
+    print("Fibonacci Number ", a, " is: ", fib, ".\n\n");
     return;
 }
