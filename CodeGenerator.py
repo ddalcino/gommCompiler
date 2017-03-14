@@ -165,7 +165,7 @@ class CG:
             "read_char":    (CG.gen_read, DataTypes.CHAR),
             "cast_int":     (CG.gen_cast, DataTypes.INT),
             "cast_float":   (CG.gen_cast, DataTypes.FLOAT),
-            "cast_char":    (CG.gen_cast, DataTypes.CHAR),
+            # "cast_char":    (CG.gen_cast, DataTypes.CHAR), # Planned for later
         }
         CG.source_file_reader = source_file_reader
 

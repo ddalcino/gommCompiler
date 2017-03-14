@@ -103,13 +103,6 @@ The grammar implemented is summarized here:
     49 TokenType.OpenBracket <expression> TokenType.CloseBracket |
     50 TokenType.OpenParen <expression_list> TokenType.CloseParen |
     51 <Epsilon>
-<boolean_expression> ==>
-    52 <expression> <boolean_comparator> <expression>
-<boolean_comparator> ==>
-    53 TokenType.EqualityOperator |
-    54 TokenType.NotEqualOperator |
-    55 TokenType.LessThanOperator |
-    56 TokenType.LessThanOrEqualOp
 
 <literal> ==>
     57 TokenType.Float |
@@ -198,11 +191,11 @@ class Parser:
 
 
         if CG.is_code_ok:
-            print("\nSuccess!!!")
+            print("\nSuccessfully compiled %s\n" % filename)
             return True
         else:
-            print("Compilation completed unsuccessfully.")
-            os.remove(asm_output_filename)
+            print("\nCompilation of %s completed unsuccessfully.\n" % filename)
+            # os.remove(asm_output_filename)
             return False
         
     
@@ -700,9 +693,10 @@ class Parser:
                 # and advance past the next semicolon
                 try:
                     Parser.basic_statement(token)
-                except ParseError:
+                except ParseError as ex:
                     CG.is_code_ok = False
-                    print(traceback.format_exc())
+                    # print(traceback.format_exc())
+                    print("\nException occurred: \n" + ex)
                     Parser.skip_tokens_if_not(TokenType.Semicolon, token)
                     Parser.match(token, TokenType.Semicolon)
 
@@ -1086,9 +1080,7 @@ class Parser:
         <factor> ==>
             TokenType.OpenParen <expression> TokenType.CloseParen |
             <variable_or_function_call> |
-            TokenType.Float |
-            TokenType.Integer |
-            TokenType.String
+            <literal>
         :return:    an ExpressionRecord that holds the result of the factor
         """
         if token.t_type == TokenType.OpenParen:
