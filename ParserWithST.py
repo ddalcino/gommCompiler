@@ -1,5 +1,6 @@
 """
 Filename: ParserWithST.py
+Tested using Python 3.5.1
 
 David Dalcino
 CS 6110
@@ -7,8 +8,7 @@ Prof. Reiter
 Winter 2017
 CSU East Bay
 
-Parser With Symbol Table Assignment
-Due 2/14/17
+Parser With Code Generation
 
 
 This file implements a parser, using recursive descent. All of the
@@ -119,12 +119,13 @@ The grammar implemented is summarized here:
 
 """
 
-from Token import TokenType, Token, DataTypes
+from Token import TokenType, Token
 from Scanner import Scanner
 from FileReader import FileReader
-from SymbolTable import SymbolTable #, IdType
+from SymbolTable import SymbolTable
 from Errors import *
-from CodeGenerator import CG, FunctionSignature, ExpressionRecord
+from CodeGenerator import CG
+from ExpressionRecord import ExpressionRecord, FunctionSignature, DataTypes
 import os
 import traceback
 
@@ -184,6 +185,15 @@ class Parser:
                 if not Parser.s_table.find("main"):
                     print("No main function found in program; point of entry "
                           "required")
+                    CG.is_code_ok = False
+
+                # Search for FunctionSignatures in the symbol table,
+                # and check that each has been defined; if not, compilation
+                # has failed
+                undefined_proto_ids = Parser.s_table.get_undefined_prototypes()
+                for func_id in undefined_proto_ids:
+                    print("Function %s was forward declared, but was never "
+                          "defined." % func_id)
                     CG.is_code_ok = False
 
 
@@ -319,9 +329,7 @@ class Parser:
 
     @staticmethod
     def display_symbol_table():
-        """
-        Prints the symbol table to the screen
-        """
+        """ Prints the symbol table to the screen """
         if Parser.s_table:
             Parser.s_table.display()
         else:
@@ -380,7 +388,7 @@ class Parser:
                 <return_datatype> TokenType.Semicolon
         """
         if token.t_type == TokenType.KeywordProto:
-            print(5, end=" ")
+            print(4, end=" ")
             Parser.match(token, TokenType.KeywordProto)
 
             # add the function identifier to the symbol table
@@ -494,6 +502,9 @@ class Parser:
                 # signature, so we can use that signature instead
                 func_signature = old_signature
 
+                # record that the signature has been defined
+                old_signature.is_prototype = False
+
             CG.code_gen_label(func_signature.label, comment=str(func_signature))
 
             offset = (4*len(param_list))
@@ -558,17 +569,8 @@ class Parser:
                 Parser.match(token, TokenType.Identifier)
                 datatype, size = Parser.datatype(token)
 
-                # # check that the identifier hasn't already been declared
-                # Parser.error_on_variable_usage(identifier, is_decl_stmt=True)
-
-                # # reserve space on the stack for the variable
-                # var_er = CG.declare_variable(datatype, identifier)
-
                 # add the parameter to the param_list
                 params.append((identifier, datatype, size))
-
-                # # insert the identifier into the symbol table
-                # Parser.s_table.insert(identifier, var_er)
 
         return params
 
@@ -584,7 +586,10 @@ class Parser:
             TokenType.KeywordChar |
             TokenType.OpenBracket TokenType.Integer TokenType.CloseBracket
             <array_of_datatype>
-        :return:    Token.DataTypes, size
+        :return:    A tuple in the form (Token.DataTypes, size), where size
+                    is the number of words that must be allocated to a
+                    variable of this datatype. Unless it's an array, size is
+                    always 1.
         """
         if token.t_type == TokenType.KeywordInt:
             print(8, end=" ")
@@ -618,7 +623,7 @@ class Parser:
             12 TokenType.KeywordInt |
             13 TokenType.KeywordFloat |
             14 TokenType.KeywordChar
-        :return:    The datatype, as a SymbolTable.IdType enum
+        :return:    The datatype, as a DataTypes enum
         """
         if token.t_type == TokenType.KeywordInt:
             print(12, end=" ")
@@ -783,13 +788,6 @@ class Parser:
 
             Parser.statement_list(token)
 
-            # Parse statement list, with error recovery on }
-            # try:
-            #     Parser.statement_list(token)
-            # except ParseError:
-            #     print(traceback.format_exc())
-            #     Parser.skip_tokens_if_not(TokenType.CloseCurly, token)
-
             Parser.match(token, TokenType.CloseCurly)
             Parser.s_table.close_scope()
 
@@ -814,6 +812,8 @@ class Parser:
             Parser.match(token, TokenType.KeywordReturn)
             Parser.match(token, TokenType.Semicolon)
             CG.code_gen("jr", "$ra")
+        else:
+            Parser.raise_production_not_found_error(token, 'return_statement')
 
 
 
@@ -834,10 +834,9 @@ class Parser:
                 raise SemanticError("If statement requires boolean expression "
                                     "as an argument",
                                     Parser.file_reader.get_line_data())
-            # er_lhs, op, er_rhs = Parser.boolean_expression(token)
             Parser.match(token, TokenType.CloseParen)
 
-            else_label = CG.gen_else_label()
+            else_label, after_else_label = CG.gen_label("else")
             CG.code_gen_if(er_condition, else_label)
 
             Parser.code_block(token)
@@ -846,7 +845,6 @@ class Parser:
                 Parser.match(token, TokenType.KeywordElse)
 
                 # the last code block must branch to after the else clause
-                after_else_label = CG.gen_after_else_label()
                 CG.code_gen("b", after_else_label)
 
                 # if test failed, then pick up program execution here
@@ -873,8 +871,8 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <declaration_statement> ==>
-            TokenType.KeywordVar TokenType.Identifier <datatype>
-            TokenType.Semicolon
+            33  TokenType.KeywordVar TokenType.Identifier <datatype>
+                TokenType.Semicolon
         """
         if token.t_type == TokenType.KeywordVar:
             print(33, end=" ")
@@ -906,12 +904,12 @@ class Parser:
         """
         Implements recursive descent for the rule:
         <while_statement> ==>
-            34 TokenType.KeywordWhile TokenType.OpenParen <expression>
+            34  TokenType.KeywordWhile TokenType.OpenParen <expression>
                 TokenType.CloseParen <code_block>
         """
         if token.t_type == TokenType.KeywordWhile:
             print(34, end=" ")
-            before_while_lbl, after_while_lbl = CG.gen_while_labels()
+            before_while_lbl, after_while_lbl = CG.gen_label("while")
 
             # Write label for beginning of while loop
             CG.code_gen_label(before_while_lbl)
@@ -1011,6 +1009,7 @@ class Parser:
         Implements recursive descent for the rule:
         <expression> ==>
             35 <term> { TokenType.AddSubOperator <term> }
+        :return:    an ExpressionRecord that holds the result of the expression
         """
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer,
@@ -1037,6 +1036,7 @@ class Parser:
         Implements recursive descent for the rule:
         <term> ==>
             39 <relfactor> { TokenType.MulDivModOperator <relfactor> }
+        :return:    an ExpressionRecord that holds the result of the term
         """
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer,
@@ -1049,7 +1049,6 @@ class Parser:
                 er_rhs = Parser.relfactor(token)
                 er_lhs = CG.gen_expression(er_lhs, er_rhs, operator)
 
-
             return er_lhs
         else:
             Parser.raise_production_not_found_error(token, 'term')
@@ -1059,9 +1058,10 @@ class Parser:
     @staticmethod
     def relfactor(token):
         """
-        Implements recursivew descent for the rule:
+        Implements recursive descent for the rule:
         <relfactor> ==>
             40 <factor> [TokenType.RelationalOperator <factor>]
+        :return:    an ExpressionRecord that holds the result of the relfactor
         """
         if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
                             TokenType.Float, TokenType.Integer,
@@ -1079,7 +1079,6 @@ class Parser:
 
 
 
-
     @staticmethod
     def factor(token):
         """
@@ -1090,6 +1089,7 @@ class Parser:
             TokenType.Float |
             TokenType.Integer |
             TokenType.String
+        :return:    an ExpressionRecord that holds the result of the factor
         """
         if token.t_type == TokenType.OpenParen:
             print(44, end=" ")
@@ -1122,6 +1122,7 @@ class Parser:
              58 TokenType.Integer |
              59 TokenType.Char |
              60 TokenType.String
+        :return:    an ExpressionRecord that holds the literal
         """
         er_literal = None
         if token.t_type == TokenType.Float:
@@ -1153,6 +1154,10 @@ class Parser:
                 TokenType.CloseBracket |
             50 TokenType.OpenParen <expression_list> TokenType.CloseParen |
             51 TokenType.Identifier
+        :return:    an ExpressionRecord that holds:
+                    49 the value at array_id[subscript], if it was an array
+                    50 the return value of the function, if it was a function;
+                    51 the value of the variable, if it was a variable id
         """
         if token.t_type == TokenType.Identifier:
             identifier = token.lexeme
@@ -1178,7 +1183,7 @@ class Parser:
                 # Match ]: wait until after potential error messages to do this
                 Parser.match(token, TokenType.CloseBracket)
 
-                # TODO: make this a CG function
+                # TODO: make this a function in CG
                 # Make a temp ExpressionRecord to hold the value at
                 # array[subscript], and return it
                 result_exp_rec = ExpressionRecord(
@@ -1198,8 +1203,7 @@ class Parser:
                                         identifier,
                                         Parser.file_reader.get_line_data())
 
-                # exp_rec is actually a function signature, so we'll call it
-                # that
+                # exp_rec is actually a function signature, so call it that
                 func_signature = exp_rec
                 Parser.match(token, TokenType.OpenParen)
                 er_params = Parser.expression_list(token)
@@ -1219,11 +1223,21 @@ class Parser:
 
     @staticmethod
     def call_function(func_identifier, func_signature, er_params):
+        """
+        Handles built-in and user-defined function calls: checks that the
+        callee is a function, checks that the parameters are of the right types,
+        and tells the code generator to generate the function call.
+        :param func_identifier:     The id of the function
+        :param func_signature:      The FunctionSignature associated with the id
+        :param er_params:           A list of ExpressionRecords that hold the
+                                    parameters
+        :return:                    An ExpressionRecord that holds the
+                                    function's return value
+        """
         # Handle built-in functions here:
         if func_identifier in CG.BUILT_IN_FUNCTIONS.keys():
             function, datatype = CG.BUILT_IN_FUNCTIONS[func_identifier]
             return function(datatype, er_params)
-
 
         # Input validation: verify that er_list types match the
         # function signature, and verify that the identifier is for a
@@ -1245,62 +1259,16 @@ class Parser:
 
 
 
-    @staticmethod
-    def boolean_expression(token):
-        """
-        Implements recursive descent for the rule:
-        <boolean_expression> ==>
-            <expression> <boolean_comparator> <expression>
-        """
-        if token.t_type in (TokenType.OpenParen, TokenType.Identifier,
-                            TokenType.Float, TokenType.Integer, TokenType.String):
-            print(52, end=" ")
-            er_lhs = Parser.expression(token)
-            operator = token.t_type
-            Parser.boolean_comparator(token)
-            er_rhs = Parser.expression(token)
-            return er_lhs, operator, er_rhs
-        else:
-            Parser.raise_production_not_found_error(
-                token, 'boolean_expression')
-
-
-
-    @staticmethod
-    def boolean_comparator(token):
-        """
-        Implements recursive descent for the rule:
-        <boolean_comparator> ==>
-            TokenType.EqualityOperator |
-            TokenType.NotEqualOperator |
-            TokenType.LessThanOperator |
-            TokenType.LessThanOrEqualOp
-        """
-        if token.t_type == TokenType.EqualityOperator:
-            print(53, end=" ")
-            Parser.match(token, TokenType.EqualityOperator)
-        elif token.t_type == TokenType.NotEqualOperator:
-            print(54, end=" ")
-            Parser.match(token, TokenType.NotEqualOperator)
-        elif token.t_type == TokenType.LessThanOperator:
-            print(55, end=" ")
-            Parser.match(token, TokenType.LessThanOperator)
-        elif token.t_type == TokenType.LessThanOrEqualOp:
-            print(56, end=" ")
-            Parser.match(token, TokenType.LessThanOrEqualOp)
-        else:
-            Parser.raise_production_not_found_error(
-                token, 'boolean_comparator')
-
-
-
-test_file_dir = "/home/dave/PycharmProjects/Compiler/testCodeGen/"
-# "C:/Users/Dave/PycharmProjects/compiler/unusedTestPrograms/" #
-output_file_dir = "/home/dave/PycharmProjects/Compiler/asmOutput/"
-# "C:/Users/Dave/PycharmProjects/compiler/asmOutput/" #
-
+# If you execute "python3 ParserWithST.py", the program entry point is here:
+# this code attempts to compile everything in the testCodeGen directory and
+# puts all the output in the asmOutput directory
 
 if __name__ == "__main__":
+    test_file_dir = "/home/dave/PycharmProjects/Compiler/testCodeGen/"
+    # "C:/Users/Dave/PycharmProjects/compiler/unusedTestPrograms/" #
+    output_file_dir = "/home/dave/PycharmProjects/Compiler/asmOutput/"
+    # "C:/Users/Dave/PycharmProjects/compiler/asmOutput/" #
+
     list_of_failed_compilations = []
     # For every file in the test file directory,
     for f in os.listdir(test_file_dir):

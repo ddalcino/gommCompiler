@@ -1,5 +1,6 @@
 """
 Filename: Token.py
+Tested using Python 3.5.1
 
 David Dalcino
 CS 6110
@@ -7,14 +8,11 @@ Prof. Reiter
 Winter 2017
 CSU East Bay
 
-Scanner Assignment
-Due 1/27/17
-
+Scanner Assignment Due 1/27/17
+Changed slightly for the Parser assignment, due 2/9/17
+Changed again for final project, due 3/9/17
 
 This file defines tokens and token types.
-
-Changed slightly for the Parser assignment, due 2/9/17, and included in that
-assignment to make the Parser more readable.
 """
 
 from enum import Enum
@@ -39,10 +37,6 @@ class TokenType(Enum):
     Semicolon = 16
     AssignmentOperator = 17
     RelationalOperator = 18
-    # EqualityOperator = 18
-    # NotEqualOperator = 19
-    # LessThanOrEqualOp = 20
-    # LessThanOperator = 21
     Comma = 22
     String = 23
     KeywordIf = 24
@@ -56,55 +50,6 @@ class TokenType(Enum):
     KeywordVar = 32
     KeywordBool = 33
     KeywordProto = 34
-
-
-
-class DataTypes(Enum):
-    """ An enumeration for basic datatypes """
-    INT = 1
-    FLOAT = 2
-    CHAR = 3
-    STRING = 4
-    BOOL = 5            # not declarable
-    ARRAY_INT = 6
-    ARRAY_FLOAT = 7
-    ARRAY_CHAR = 8
-    ARRAY_STRING = 9
-    ARRAY_BOOL = 10
-
-
-
-    @staticmethod
-    def basic_to_array(data_type):
-        mapping = {
-            DataTypes.INT:      DataTypes.ARRAY_INT,
-            DataTypes.FLOAT:    DataTypes.ARRAY_FLOAT,
-            DataTypes.CHAR:     DataTypes.ARRAY_CHAR,
-            DataTypes.STRING:   DataTypes.ARRAY_STRING,
-            DataTypes.BOOL:     DataTypes.ARRAY_BOOL,
-        }
-        return mapping[data_type]
-
-
-
-    @staticmethod
-    def is_array(data_type):
-        return data_type in (DataTypes.ARRAY_INT, DataTypes.ARRAY_FLOAT,
-                             DataTypes.ARRAY_CHAR, DataTypes.ARRAY_STRING,
-                             DataTypes.ARRAY_BOOL)
-
-
-    @staticmethod
-    def array_to_basic(data_type):
-        mapping = {
-            DataTypes.ARRAY_INT:    DataTypes.INT,
-            DataTypes.ARRAY_FLOAT:  DataTypes.FLOAT,
-            DataTypes.ARRAY_CHAR:   DataTypes.CHAR,
-            DataTypes.ARRAY_STRING: DataTypes.STRING,
-            DataTypes.ARRAY_BOOL:   DataTypes.BOOL,
-        }
-        return mapping[data_type]
-
 
 
 class Token:
@@ -122,11 +67,7 @@ class Token:
         TokenType.CloseBracket: "]",
         TokenType.Semicolon: ";",
         TokenType.AssignmentOperator: "=",
-        # TokenType.EqualityOperator: "==",
-        # TokenType.NotEqualOperator: "!=",
-        # TokenType.LessThanOrEqualOp: "<=",
-        # TokenType.LessThanOperator: "<",
-        TokenType.KeywordBool: "bool",
+        # TokenType.KeywordBool: "bool",    # Bools are for internal use only
         TokenType.KeywordChar: "char",
         TokenType.KeywordElse: "else",
         TokenType.KeywordFloat: "float",
@@ -142,7 +83,6 @@ class Token:
 
     # Static translation table from lexeme to keyword
     keywords = {
-        "bool":     TokenType.KeywordBool,
         "char":     TokenType.KeywordChar,
         "else":     TokenType.KeywordElse,
         "float":    TokenType.KeywordFloat,
@@ -153,6 +93,9 @@ class Token:
         "return":   TokenType.KeywordReturn,
         "var":      TokenType.KeywordVar,
         "while":    TokenType.KeywordWhile,
+        # Not yet implemented; bools are currently for internal use only,
+        # for conditional expressions
+        # "bool":     TokenType.KeywordBool,
     }
 
 
@@ -182,7 +125,7 @@ class Token:
 
 
     def __str__(self):
-        """ returns a string representation of the token """
+        """ returns a string representation of the token's lexeme """
         return self.lexeme
 
 

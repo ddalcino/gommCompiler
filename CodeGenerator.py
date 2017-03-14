@@ -1,91 +1,23 @@
-from Token import TokenType, DataTypes
+"""
+Filename: CodeGenerator.py
+Tested using Python 3.5.1
+
+David Dalcino
+CS 6110
+Prof. Reiter
+Winter 2017
+CSU East Bay
+
+This file contains CG, a class that implements a code generator for MIPS.
+This file is separate from the parser, in an attempt to keep code generation
+separate; theoretically, if you wanted to compile to some architecture other
+than MIPS, you would only have to rewrite this file and not the parser. I am
+not convinced that the parser is entirely separate from the MIPS
+architecture, but I have done the best I can.
+"""
+
+from ExpressionRecord import ExpressionRecord, FunctionSignature, DataTypes
 from Errors import *
-
-
-class ExpressionRecord:
-
-    def __init__(self, data_type, loc, is_temp, is_reference=False):
-        """
-
-        :param data_type:   A Token.DataTypes object. INT|FLOAT|CHAR|STRING
-        :param loc:         The offset from $sp where the value exists
-        :param is_temp:     A boolean to let us know if the record is
-                            temporary, and may be overwritten when no longer
-                            in use. Always False for variables; True for
-                            anything else
-        :param is_reference: A boolean, lets us know if the value is a
-                            reference or not, and will need to be
-                            dereferenced before use
-        :return:
-        """
-        assert(isinstance(data_type, DataTypes))
-        self.loc = loc
-        self.data_type = data_type
-        self.is_temp = is_temp
-        self.is_ref = is_reference
-
-
-
-    def is_array(self):
-        return DataTypes.is_array(self.data_type)
-
-
-
-    def __str__(self):
-        return str(self.data_type).split('.')[-1] + " @%d" % self.loc
-
-
-
-class FunctionSignature:
-    def __init__(self, identifier, label=None,
-                 #param_list_ids,
-                 param_list_types=None,
-                 #return_id,
-                 return_type=None,
-                 is_prototype=False):
-        #assert(len(param_list_types) == len(param_list_ids))
-        # for type in param_list_types:
-        #     assert(isinstance(type, DataTypes))
-        # assert(isinstance(return_type, DataTypes))
-
-        self.identifier = identifier
-        self.label = label
-        #self.param_list_ids = param_list_ids
-        self.param_list_types = param_list_types
-        #self.return_id = return_id
-        self.return_type = return_type
-        self.is_prototype = is_prototype
-
-    def __str__(self):
-        params_str = ', '.join(
-            [str(x).split('.')[-1] for x in self.param_list_types])
-        return_type_str = str(self.return_type).split('.')[-1]
-
-        return self.identifier + "(" + params_str + ") " + return_type_str
-
-
-
-class RegisterDB:
-    """
-    A register database, for use in peephole optimization
-    """
-    def __init__(self):
-        # self.data holds a list of key-value pairs, where the key is the
-        # name of a register, and the value is the offset into the stack from
-        # $fp that the register has been most recently copied into.
-        self.data = {
-            "$t0": 0,    "$t1": 0,    "$t2": 0,    "$t3": 0,    "$t4": 0,
-            "$t5": 0,    "$t6": 0,    "$t7": 0,    "$t8": 0,    "$t9": 0,
-            "$s0": 0,    "$s1": 0,    "$s2": 0,    "$s3": 0,
-            "$s4": 0,    "$s5": 0,    "$s6": 0,    "$s7": 0,
-            "$f0": 0,    "$f1": 0,    "$f2": 0,    "$f3": 0,    "$f4": 0,
-            "$f5": 0,    "$f6": 0,    "$f7": 0,    "$f8": 0,    "$f9": 0,
-            "$f10": 0,   "$f11": 0,   "$f12": 0,   "$f13": 0,   "$f14": 0,
-            "$f15": 0,   "$f16": 0,   "$f17": 0,   "$f18": 0,   "$f19": 0,
-            "$f20": 0,   "$f21": 0,   "$f22": 0,   "$f23": 0,   "$f24": 0,
-            "$f25": 0,   "$f26": 0,   "$f27": 0,   "$f28": 0,   "$f29": 0,
-            "$f30": 0,   "$f31": 0,
-        }
 
 
 class CG:
@@ -105,8 +37,10 @@ class CG:
     is_code_ok = True       # Always True, unless errors have been encountered
     next_offset = -8        # The offset of the next available position on
                             # the stack
-    num_labels_made = None
-    source_file_reader = None
+    num_labels_made = None      # A dictionary that keeps track of how many
+                                # labels were made of each type
+    source_file_reader = None   # A FileReader that contains the source code.
+                                # Used only for error messages.
     last_instruction = None     # A record of the last instruction generated,
                                 # for use in peephole optimization. Only
                                 # accessed or written to by CG.code_gen().
@@ -114,6 +48,10 @@ class CG:
     #################################################################
     # STATIC CONSTANT DATA:
 
+    # MIPS_INST defines what MIPS instructions should be used for each
+    # arithmetic operator. It uses nested dictionaries, where the outer key
+    # is an arithmetic operator, and the inner key is a datatype. An
+    # instruction would be accessed by CG.MIPS_INST[operator][datatype].
     MIPS_INST = {
         "+": {
             DataTypes.INT: "add",
@@ -136,55 +74,83 @@ class CG:
         },
     }
 
+    # MIPS_TYPES is a dictionary that defines how literals should be written
+    # into an assembly file when they are attached to a label. The key is a
+    # datatype, and the associated value is a tuple of the form
+    # (TYPE, FORMAT_STRING) where TYPE is the datatype that the MIPS
+    # assembler expects, and FORMAT_STRING is used to translate from a Python
+    # datatype into a literal that the assembler can understand.
     MIPS_TYPES = {
         DataTypes.STRING: (".asciiz", '%s'),
         DataTypes.INT: (".word", '%d'),
         DataTypes.FLOAT: (".float", '%f'),
-        DataTypes.CHAR: (".byte", '%c'),    #FIXME
+        DataTypes.CHAR: (".byte", '%c'),
     }
 
+    # BUILT_IN_FUNCTIONS will be a dictionary that pairs the identifiers of
+    # built-in functions with the functions in CG that will implement them.
+    # Python refuses to make key-value pairs between a key and a function
+    # here, before those functions have been defined, so I have make the
+    # actual dictionary in the CG.init() function below, which must be called
+    # before CG is used for anything else.
     BUILT_IN_FUNCTIONS = {}
 
-    PROLOGUE = '\t.text\n' \
-               '\t.globl main\n' \
-               'main:\n' \
-               '\tmove\t$fp,$sp\n' \
-               '\tla\t$a0,ProgStart\n' \
-               '\tli\t$v0,4                    # Print Syscall\n' \
-               '\tsyscall\n' \
-               '\tjal\tmain_func\n'
 
-    EPILOGUE = '\tla $a0,ProgEnd\n' \
-               '\tli $v0,4                    # Print Syscall\n' \
-               '\tsyscall\n' \
-               '\tli $v0,10                   # Exit Syscall\n' \
-               '\tsyscall\n' \
-               '\t.data\n' \
-               'ProgStart:\t.asciiz\t"Program Start\\n"\n' \
-               'ProgEnd:\t.asciiz\t"Program End\\n"\n' \
-               '\t.text\n'
-
+    # Not sure if this is really necessary, but I'm using it anyway just in
+    # case this code ever has to be run on a Windows machine. Any time CG
+    # executes a write to the .asm output file, it ends the line with one of
+    # these.
     LINE_ENDING = "\n"                  # "\r\n" for windows
+
+
+    # A label used as the program entry point. The prologue jumps to this
+    # label, and when the CG.gen_label() is asked to create a label for the
+    # main function, it returns this label.
+    ENTRY_POINT_LABEL = "main_func"
+
+
+    # The pro-log
+    PROLOGUE = '\t.text' + LINE_ENDING + \
+               '\t.globl main' + LINE_ENDING + \
+               'main:' + LINE_ENDING + \
+               '\tmove\t$fp,$sp' + LINE_ENDING + \
+               '\tla\t$a0,ProgStart' + LINE_ENDING + \
+               '\tli\t$v0,4                   # Print Syscall' + LINE_ENDING + \
+               '\tsyscall' + LINE_ENDING + \
+               '\tjal\t' + ENTRY_POINT_LABEL + LINE_ENDING
+
+
+    # The post-log
+    EPILOGUE = '\tla $a0,ProgEnd' + LINE_ENDING + \
+               '\tli $v0,4                    # Print Syscall' + LINE_ENDING + \
+               '\tsyscall' + LINE_ENDING + \
+               '\tli $v0,10                   # Exit Syscall' + LINE_ENDING + \
+               '\tsyscall' + LINE_ENDING + \
+               '\t.data' + LINE_ENDING + \
+               'ProgStart:\t.asciiz\t"Program Start\\n"' + LINE_ENDING + \
+               'ProgEnd:\t.asciiz\t"Program End\\n"' + LINE_ENDING + \
+               '\t.text' + LINE_ENDING
 
 
     #################################################################
     # STATIC MEMBER FUNCTIONS:
 
-
-
     @staticmethod
     def init(code_file, source_file_reader):
         """
         Initializes the Code Generator, so that it will be ready to write a
-        code file.
+        code file. This function must be run before using CG for anything else.
         :param code_file:   A file object that the user has opened with the
                             builtin Python 'open' command. Must be writable.
+        :param source_file_reader:  A FileReader that is being used to read
+                                    the source code file. Used only for
+                                    printing errors.
         """
         assert(code_file.writable())
         CG.code_file = code_file
         CG.is_code_ok = True
         CG.next_offset = -8
-        CG.num_labels_made ={
+        CG.num_labels_made = {
             "string": 0,
             "float": 0,
             "function": 0,
@@ -206,49 +172,46 @@ class CG:
 
 
     @staticmethod
-    def gen_string_label():
-        label = "string_lbl_%d" % CG.num_labels_made["string"]
-        CG.num_labels_made["string"] += 1
-        return label
-
-
-    @staticmethod
-    def gen_float_label():
-        label = "float_lbl_%d" % CG.num_labels_made["float"]
-        CG.num_labels_made["float"] += 1
-        return label
-
-
-
-    @staticmethod
-    def gen_else_label():
-        label = "else_lbl_%d" % CG.num_labels_made["else"]
-        CG.num_labels_made["else"] += 1
-        return label
-
-
-
-    @staticmethod
-    def gen_after_else_label():
-        label = "after_else_lbl_%d" % CG.num_labels_made["after_else"]
-        CG.num_labels_made["after_else"] += 1
-        return label
-
-
-
-    @staticmethod
-    def gen_while_labels():
-        before_label = "while_lbl_%d" % CG.num_labels_made["while"]
-        after_label = "after_while_lbl_%d" % CG.num_labels_made["while"]
-        CG.num_labels_made["while"] += 1
-        return before_label, after_label
+    def gen_label(type):
+        """
+        Generates two labels, with a unique number attached to them,
+        and keeps track of how many of that type have been made.
+        :param type:    A string; must be in ("string","float","else","while")
+        :return:        Two labels that look like: TYPE_lbl_N, after_TYPE_lbl_N,
+                        where TYPE is the parameter type, and N is the number of
+                        labels that have been made of that type. The 'after'
+                        labels will only be useful for the 'else' and 'while'
+                        types, but they will be made for the others to keep
+                        things simple.
+        """
+        if type in ("string", "float", "else", "while"):
+            label = "%s_lbl_%d" % (type, CG.num_labels_made[type])
+            after_label = "after_%s_lbl_%d" % \
+                          (type, CG.num_labels_made[type])
+            CG.num_labels_made[type] += 1
+            return label, after_label
+        else:
+            print("\nProgrammer error; gen_label() only supports labels of "
+                  "types string, float, else, and while")
+            assert False
 
 
 
     @staticmethod
     def gen_function_label(function_id):
+        """
+        Makes a unique label for each function.
+        :param function_id:     the function identifier
+        :return:                a label that looks like func_ID_N, where ID
+                                is the identifier, and N is the number of
+                                function labels that have been made so far.
+                                If function_id is 'main', then the unique
+                                program entry point label is returned; it is
+                                hard-coded to be CG.ENTRY_POINT_LABEL because
+                                the prologue is hard-coded to jump to it.
+        """
         if function_id == "main":
-            return "main_func"
+            return CG.ENTRY_POINT_LABEL
         else:
             label = "func_%d_%s" % (CG.num_labels_made["function"], function_id)
             CG.num_labels_made["function"] += 1
@@ -358,6 +321,13 @@ class CG:
 
     @staticmethod
     def gen_rel_expression(er_lhs, er_rhs, operator):
+        """
+        Generates an ExpressionRecord of type BOOL
+        :param er_lhs:
+        :param er_rhs:
+        :param operator:
+        :return:
+        """
         assert  isinstance(er_lhs, ExpressionRecord) and \
                 isinstance(er_rhs, ExpressionRecord)
         if er_lhs.data_type != er_rhs.data_type:
@@ -490,7 +460,11 @@ class CG:
                  comment=None):
         """
         Generates a line of code, and inserts it into the code file.
+        Attempts some basic peephole code optimization.
 
+        Almost all code generation is piped through this function, with a few
+        exceptions: gen_labelled_data(), write_prolog(), write_epilogue().
+        This was done to facilitate future code optimization.
         :param instruction: The MIPS instruction to use
         :param rd:      The destination register
         :param rt:      The temp register (optional)
@@ -499,7 +473,7 @@ class CG:
         :return:        None
         """
 
-        # Peephole optimization: size is one instruction
+        # Peephole code optimization: size is one instruction
         if CG.last_instruction:
             if CG.last_instruction["rd"] == rd and \
                     CG.last_instruction["rt"] == rt and (
@@ -554,13 +528,6 @@ class CG:
         """
         CG.code_gen(label, comment=comment, has_label=True)
 
-        # f_comment = ""          # Formatted comment
-        # if comment is not None:
-        #     f_comment = "# " + comment
-        #
-        # line_of_code = label + ":\t\t\t" + f_comment
-        # CG.output(line_of_code)
-
 
 
     @staticmethod
@@ -570,8 +537,6 @@ class CG:
         :param comment:     The comment to print
         """
         CG.code_gen(None, comment=comment)
-        # line_of_code = "\t\t\t\t# " + comment
-        # CG.output(line_of_code)
 
 
 
@@ -580,12 +545,6 @@ class CG:
         """
         Prints data with a label, between lines of code
         """
-        # CG.code_gen(None)
-        # CG.code_gen(".data")
-        # CG.code_gen(label, CG.MIPS_TYPES[data_type][0],
-        #             CG.MIPS_TYPES[data_type][1] % value, has_label=True)
-        # CG.code_gen(None)
-        # CG.code_gen(".text")
         CG.output("")
         CG.output("\t.data")
         CG.output(label + ":\t" + CG.MIPS_TYPES[data_type][0] + "\t" +
@@ -611,6 +570,7 @@ class CG:
         CG.code_gen_comment(comment="Reserve %d words on stack for var %s at"
                                     " %d($fp)" % (size, identifier, var.loc))
         return var
+
 
 
     @staticmethod
@@ -655,6 +615,7 @@ class CG:
         return temp_var
 
 
+
     @staticmethod
     def create_literal(data_type, value):
         """
@@ -691,7 +652,7 @@ class CG:
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.FLOAT:
             # make a label
-            label = CG.gen_float_label()
+            label, unused_label = CG.gen_label("float")
             # put value into code, at that label
             CG.gen_labelled_data(label, data_type, value)
             CG.code_gen("la", "$t0", label)     # load address of float
@@ -699,7 +660,7 @@ class CG:
             # store float on stack
             CG.code_gen("sw", "$t0", "%d($fp)" % literal.loc)
         elif data_type == DataTypes.STRING:
-            label = CG.gen_string_label()
+            label, unused_label = CG.gen_label("string")
             CG.gen_labelled_data(label, data_type, value)
             CG.code_gen("la", "$t0", label)
             # store pointer to string on the stack
@@ -711,6 +672,17 @@ class CG:
     @staticmethod
     def code_gen_assign(er_dest, er_source, src_subscript=None,
                         dest_subscript=None, is_cast=False):
+        """
+        Generates code that implements the assignment of er_source to
+        er_dest. Can handle references and array subscripts on both sides.
+        :param er_dest:         ExpressionRecord for the destination, lhs
+        :param er_source:       ExpressionRecord for the source, rhs
+        :param src_subscript:   ExpressionRecord for the source subscript
+        :param dest_subscript:  ExpressionRecord for the dest subscript
+        :param is_cast:         boolean, defines whether or not a cast is
+                                occurring
+        :return:                None
+        """
         assert(isinstance(er_dest, ExpressionRecord) and
                isinstance(er_source, ExpressionRecord))
 
@@ -735,7 +707,13 @@ class CG:
 
     @staticmethod
     def code_gen_if(er_condition, lbl_on_failed_test):
-
+        """
+        Generates code that tests if a condition is true, and if the test
+        fails, branches to the fail state label.
+        :param er_condition:        ExpressionRecord for the test condition
+        :param lbl_on_failed_test:  the fail state label
+        :return:                    None
+        """
         # put er_condition in t0
         CG.load_reg(reg_dest="$t0", er_src=er_condition, reg_temp="$t2")
 
@@ -787,8 +765,8 @@ class CG:
     @staticmethod
     def gen_print(datatype, param_list):
         """
-        Generates inline code that calls the syscall for the appropriate
-        print function
+        Generates inline code that calls the syscalls necessary to print
+        every ExpressionRecord in the parameter list
         :param datatype:    Not used. Necessary for the other built-in
                             functions, but this one can get the necessary
                             datatype info from param_list
@@ -897,7 +875,7 @@ class CG:
                                     floating point register, this will cause
                                     the 'lwc1' instruction to be used instead of
                                     'lw'.
-        :return:
+        :return:                None
         """
         assert isinstance(er_src, ExpressionRecord)
 
@@ -975,7 +953,6 @@ class CG:
         :return:    An ExpressionRecord where the parameter ExpressionRecord
                     has changed to destination_type
         """
-        # TODO finish
         if len(param_list) != 1:
             raise SemanticError("Casting functions require one argument",
                                 CG.source_file_reader.get_line_data())
@@ -993,7 +970,6 @@ class CG:
         elif er_input.data_type == DataTypes.INT and \
                 destination_type == DataTypes.FLOAT:
             # Convert int to float
-            # TODO: use CG functions for load and store
             CG.load_reg("$f0", er_input, reg_temp="$t1", use_coprocessor_1=True)
             CG.code_gen("cvt.s.w", "$f0", "$f0")
             CG.store_reg(er_output, "$f0", reg_temp="$t1", reg_temp2="$t2",
@@ -1027,8 +1003,6 @@ class CG:
         assert isinstance(func_rec, FunctionSignature) and \
             isinstance(func_rec.label, str)
 
-        # store links and saved status
-        # store temporaries and local data
         # store parameters and returned value
         # TODO: should not declare a new variable, just make space on stack
         er_retval = CG.declare_variable(func_rec.return_type, "return_var",
@@ -1046,7 +1020,6 @@ class CG:
         CG.code_gen("addi", "$sp", "$fp", CG.next_offset)
 
         # store control link and return address
-        # CG.code_gen("addi", "$sp", "$sp", -4)
         CG.code_gen("sw", "$fp", "($sp)", comment="store old control link")
 
         CG.code_gen("move", "$fp", "$sp", comment="make new control link")
@@ -1057,9 +1030,6 @@ class CG:
         CG.code_gen("jal", func_rec.label)
 
         # restore control link and return address
-        #ra=-4($fp)
-        #sp = fp
-        #fp=0(fp)
         CG.code_gen("lw", "$ra", "-4($fp)", comment="restore old ra")
         CG.code_gen("move", "$sp", "$fp", comment="restore old sp")
         CG.code_gen("addi", "$sp", "$sp", 4*(len(params)+1),

@@ -1,5 +1,34 @@
-__author__ = 'dave'
-from enum import Enum
+"""
+Filename: SymbolTable.py
+Tested using Python 3.5.1
+
+David Dalcino
+CS 6110
+Prof. Reiter
+Winter 2017
+CSU East Bay
+
+Symbol Table Assignment Due 1/14/17
+
+This file defines a SymbolTable, which is organized into several scopes,
+each of which hold a list of variable and function identifiers; these
+variables and functions are only visible while they are in an open scope.
+
+Each variable identifier is attached to an ExpressionRecord that defines its
+relative physical location in memory, datatype, etc. ExpressionRecords are
+defined in ExpressionRecord.py.
+
+Each function identifier is attached to a FunctionSignature that defines the
+order and types of parameters, the return type, and a label to which a caller
+must jump and link. FunctionSignatures are defined in ExpressionRecord.py.
+Because functions can only be declared in the global scope, FunctionSignatures
+are only found in the global scope. Also, variables cannot be declared in the
+global scope, so the only key-value pairs in the global scope are
+function_identifier-FunctionSignature pairs.
+"""
+
+from ExpressionRecord import FunctionSignature
+
 
 class Scope:
     """
@@ -75,10 +104,6 @@ class SymbolTable:
         # Get the symbol table ready to accept new values: open a new scope.
         # This is the global scope; closing it is an error
         self.open_scope()
-
-        # # The global scope holds all the builtin functions by default.
-        # for fn in builtin_functions:
-        #     self.insert(fn, {"type": IdType.Function})
 
 
 
@@ -182,8 +207,30 @@ class SymbolTable:
 
 
     def get_scope_id(self):
+        """ Returns the number associated with the innermost open scope """
         return self.open_scopes[-1].id_number
 
+
+
+    def get_undefined_prototypes(self):
+        """
+        Searches for FunctionSignatures in the symbol table that have not yet
+        been defined. If any are found, it returns a list of their identifiers.
+        """
+        undef_func_ids = []     # a list to hold the identifiers for
+                                # undefined functions
+
+        # Only the global scope can hold FunctionSignatures
+        scope = self.open_scopes[0]
+        for func_id in scope.data.keys():       # Look at all items in scope
+            func_signature = scope.data[func_id]
+            if isinstance(func_signature, FunctionSignature):
+                if func_signature.is_prototype:
+                    # Any time a function is defined, is_prototype is set
+                    # to False, therefore if is_prototype is True, then
+                    # it hasn't been defined
+                    undef_func_ids.append(func_signature.identifier)
+        return undef_func_ids
 
 
     class CloseGlobalScopeException(Exception):

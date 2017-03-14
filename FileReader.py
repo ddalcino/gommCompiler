@@ -1,5 +1,6 @@
 """
 Filename: FileReader.py
+Tested with Python 3.5.1
 
 David Dalcino
 CS 6110
