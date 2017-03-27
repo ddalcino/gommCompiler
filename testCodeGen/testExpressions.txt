@@ -1,20 +1,39 @@
 func main() result int {
     var n int;
     var a int;
-    a = 5;
-    print("\na is "); print(a);
+    a = 8;
     n = 5;
-    print("\nn is "); print(n);
-    a = n;
-    print("\na is "); print(a);
-    a = a + n;
-    print("\na+n is "); print(a);
-    a = a * n;
-    print("\na*n is "); print(a);
-    a = a+a*n-2;
-    print("\na+a*n-2 is "); print(a);
-    a = a*(a+n)/2;
-    print("\na*(a+n)/2 is "); print(a);
-    result = a;
-    return;
+
+    # Test integer division and remainder
+    print("Expect 1: 8 / 5 =", 8/5, '\n');
+    print("Expect 3: 8 % 5 =", 8%5, '\n');
+
+    # Test nested if and while
+    if (a > n) {
+        # Inner a
+        var a int;
+        a = 3;
+        while (a < n) {
+            print("Inner a is ", a, " and less than n (expect print 2x)\n");
+            a = a+1;
+            if (a == 4) {
+                var a int;
+                a = 99;
+                print("Inner inner a is ", a, " and outer n is ", n,
+                      " (expect print once)\n");
+                if (a < 4) {
+                    print("Potential dangling else can't happen because of ",
+                          "curly braces and unique labels\n",
+                          "(expect not to print; but next line prints twice ",
+                          "if dangling else occurs)\n");
+                }
+            } else {
+                print("Inner a is not 4 (expect print once)\n");
+            }
+        }
+        print("Inner a is back to ", a, " (expect 5)\n");
+    }
+    print("Outer a is back to ", a, " (expect 8)\n");
+
+
 }

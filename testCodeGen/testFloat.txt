@@ -1,11 +1,47 @@
+# test conditions with floating point unit
+func check_conditions(a float, b float) _ int {
+    if (a < b) {
+        print(a, " is less than ", b, '\n');
+    }
+    if (a <= b) {
+        print(a, " is less than or equal to ", b, '\n');
+    }
+    if (a == b) {
+        print(a, " is equal to ", b, '\n');
+    }
+    if (a >= b) {
+        print(a, " is greater than or equal to ", b, '\n');
+    }
+    if (a > b) {
+        print(a, " is greater than  ", b, '\n');
+    }
+    if (a != b) {
+        print(a, " is not equal to ", b, '\n');
+    }
+
+}
+
+
 func main() _ int {
     var f float;
-    f = 0.0;
-    while(0<1){
-        print("\nEnter a float: ");
-        f = read_float();
-        print(f); print(" * "); print(f); print(" is: ");
-        print(f * f);
+    f = 2.125;
+
+    var f_array [3] float;
+    f_array[0] = 1.25;
+    f_array[1] = f;
+    f_array[2] = 2.25;
+
+    var i int;
+    i = 0;
+
+    while(i < 3){
+        check_conditions(f, f_array[i]);
+
+        print(f, " * ", f_array[i], " = ", (f*f_array[i]), '\n');
+        print(f, " / ", f_array[i], " = ", (f/f_array[i]), '\n');
+        print("cast_int(", f_array[i], ") == ", cast_int(f_array[i]), '\n');
+
+        i = i + 1;
     }
 
 }

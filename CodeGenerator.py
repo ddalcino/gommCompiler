@@ -891,10 +891,10 @@ class CG:
             # dereference ptr to source data; put it in reg_value_to_store
             CG.code_gen(instruction, reg_dest, "(%s)" % reg_dest)
         elif er_src.is_ref:
-            # put ptr to source data in reg_value_to_store
-            CG.code_gen(instruction, reg_dest, "%d($fp)" % er_src.loc)
+            # put ptr to source data in reg_temp
+            CG.code_gen("lw", reg_temp, "%d($fp)" % er_src.loc)
             # dereference ptr to source data; put it in reg_value_to_store
-            CG.code_gen(instruction, reg_dest, "(%s)" % reg_dest)
+            CG.code_gen(instruction, reg_dest, "(%s)" % reg_temp)
         else:
             # put source data in reg_value_to_store
             CG.code_gen(instruction, reg_dest, "%d($fp)" % er_src.loc)

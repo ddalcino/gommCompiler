@@ -1,9 +1,9 @@
 func recurse(n int) result int {
-    print("\nDepth is "); print(n); print(" from the bottom.\n");
+    print("\nDepth is ", n, " from the bottom.");
     if(0<n){
         result = 1 + recurse(n-1);
     } else {
-        result = 1;
+        result = 0;
     }
 }
 
@@ -35,12 +35,8 @@ func main() _ int {
     n = 10;
     var result int;
     result = recurse(n);
-    print("Recursed "); print(n); print(" times, result was: "); print(result);
-    print("\n");
-
-    result = fibonacci_r(10);
-    print("Fib number "); print(n); print(" is: "); print(result);
-    print("\n");
+    print("\nRecursive call ", n, " times, result was: ", result,
+          "; Expect 10\n");
 
     while (0 <= n) {
         print("\nEnter an int: [negative to quit]: ");

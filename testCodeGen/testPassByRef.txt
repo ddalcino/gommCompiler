@@ -1,3 +1,7 @@
+# tests whether or not pass by reference is working
+
+# sets a parameter value within a function, thereby affecting the value that
+# exists in the scope of main
 func foo(n int) _ int {
 
     print("In foo()\n");
@@ -5,6 +9,9 @@ func foo(n int) _ int {
     print("n is now ", n, '\n');
 }
 
+# sets the values in an array passed into a function's parameters, thereby
+# affecting the values that exist in the scope of main
+# Also tests read_int() built-in function
 func bar(a [5]int) _ int {
     var i int;
     i = 0;

@@ -12,10 +12,8 @@ func main() _ int {
     while (n < MAX) {
         if (n < 1) {
             a[n] = 0;
-            print("a["); print(n); print("]="); print(a[n]); print("\n");
         } else {
             a[n] = 1;
-            print("a["); print(n); print("]="); print(a[n]); print("\n");
             var last int;
             last = 0;
             var temp int;
@@ -25,7 +23,6 @@ func main() _ int {
                 temp = last + a[n];
                 last = a[n];
                 a[n] = temp;
-                print("a["); print(n); print("]="); print(a[n]); print("\n");
                 i = i + 1;
             }
         }

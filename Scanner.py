@@ -95,6 +95,7 @@ delta = {
         "=": "Assignment_Accept",
         "!": "Bang",
         "<": "LessThan_Accept",
+        ">": "GreaterThan_Accept",
         "&": "And_Start",
         "|": "Or_Start",
 
@@ -195,6 +196,9 @@ delta = {
     "LessThan_Accept": {
         "=": "LessThanEquals_Accept"
     },
+    "GreaterThan_Accept": {
+        "=": "GreaterThanEquals_Accept"
+    },
     "And_Start": {
         "&": "And_Accept",
     },
@@ -204,6 +208,7 @@ delta = {
     "NotEquals_Accept": {},
     "Equals_Accept": {},
     "LessThanEquals_Accept": {},
+    "GreaterThanEquals_Accept": {},
     "And_Accept": {},
     "Or_Accept": {},
 
@@ -235,6 +240,8 @@ token_type_for_accept_state = {
     "NotEquals_Accept":     tt.RelationalOperator,
     "LessThan_Accept":      tt.RelationalOperator,
     "LessThanEquals_Accept": tt.RelationalOperator,
+    "GreaterThanEquals_Accept": tt.RelationalOperator,
+    "GreaterThan_Accept":   tt.RelationalOperator,
     "And_Accept":           tt.RelationalOperator,
     "Or_Accept":            tt.RelationalOperator,
 

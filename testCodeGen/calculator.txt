@@ -1,3 +1,10 @@
+# Calculator: implements recursive descent
+
+# test forward declaration of function prototype
+proto expression(next_char char, ok int) e int;
+
+
+# test chaining of boolean relational operators with an 'or'
 func match_add_sub(next_char char) ok int {
     # If next_char is a + or -, it reads the next char and returns 1.
     # Otherwise, returns 0.
@@ -46,6 +53,9 @@ func match_close_p(next_char char) ok int {
     }
 }
 
+# test chaining of boolean relational operators with an 'and'
+# test comparison of char values
+# test casting of char to int
 func literal(next_char char, ok int) lit int {
     # If next_char is a number, it turns the following sequence of numbers
     # into a single number and returns it. ok is set to 1, meaning that the
@@ -60,9 +70,6 @@ func literal(next_char char, ok int) lit int {
         print(next_char);
     }
 }
-
-# forward declaration of function prototype
-proto expression(next_char char, ok int) e int;
 
 func factor(next_char char, ok int) fac int {
     # f -> (exp) | lit
