@@ -14,9 +14,9 @@ Due 2/9/17
 This file tests a recursive descent parser.
 """
 
-import Parser, os
+import ParserWithST, os
 
-test_file_dir = "/home/dave/PycharmProjects/Compiler/testParser/"
+test_file_dir = "testPrograms"
 
 if __name__ == "__main__":
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
         print("\nParsing file " + f)
 
         try:
-            Parser.Parser.parse(input_filename)
+            ParserWithST.Parser.parse(input_filename, asm_output_filename="out.asm")
         except Exception as ex:
             print("\nException occurred while parsing file %s:\n%s" % (f, ex))
 

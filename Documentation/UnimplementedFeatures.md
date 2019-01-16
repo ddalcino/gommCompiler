@@ -1,8 +1,8 @@
 
-Unimplemented features, planned for future release:
+## Unimplemented features, planned for future release:
 
 
-Code Optimization.
+#### Code Optimization.
 
 Currently, very little has been done in terms of code optimization. Peephole
 optimization has been implemented, using a window of two instructions.
@@ -10,7 +10,7 @@ Register allocation should be implemented in the next release, with
 strength reduction planned for the following release.
 
 
-Boolean Datatype
+#### Boolean Datatype
 
 One strange and unsatisfying thing about the language in its current state
 is that it does not handle Boolean variables. Booleans are already used
@@ -18,7 +18,7 @@ internally by the compiler, and it should be fairly simple to implement
 them fully for users. Full support is planned for the next release.
 
 
-String Datatype
+#### String Datatype
 
 Currently, strings are immutable, and may only occur in user code as
 literals. They cannot be assigned to variables yet, but the next release
@@ -26,13 +26,13 @@ should have support for variables that point to dynamically-allocated,
 modifiable strings.
 
 
-Built-in File-Handling
+#### Built-in File-Handling
 
 Built-in functions that open, read, write, seek, and close files are planned
 for the next release.
 
 
-Size-Aware Arrays
+#### Size-Aware Arrays
 
 Currently, arrays can only be statically declared at compile time. It would
 be very simple to keep track of the size of the array, and check the
@@ -42,7 +42,7 @@ all; not even a check for negative numbers. This makes it very easy for
 user code to read and overwrite any value on the stack.
 
 
-Range-Based For Loops
+#### Range-Based For Loops
 
 The addition of size-aware arrays makes it easy to automatically generate
 for loops that safely traverse an array. Range-based for loops are safer,
@@ -55,7 +55,7 @@ release:
 	}
 
 
-Function Prototype Flexibility
+#### Function Prototype Flexibility
 
 Function prototypes currently require that the identifiers for each
 parameter and return value are specified in the prototype, where they are
@@ -65,7 +65,7 @@ for prototypes altogether by adding a second pass to the compiler that
 finds all function signatures on its own, before defining the functions.
 
 
-User-Defined Datatypes
+#### User-Defined Datatypes
 
 The addition of structures will make user code much more capable, and will
 make it significantly easier to write a Go-- compiler in the Go-- language.
