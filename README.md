@@ -23,8 +23,7 @@ was done with MIPSym.
 
 ### License
 I have chosen the MIT license so that you are free to modify or reuse any of
-this code as you wish. You are free to credit me for my work, but you don't 
-have to.
+this code as you wish.
 
 ### Quick Start
 
